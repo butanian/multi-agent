@@ -20,6 +20,50 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# ── Thinking level configuration ───────────────────────────────────────────────
+# 1 = light, 2 = medium, 3 = high
+thinking_flag() {
+  case "$1" in
+    1)  echo "--append-system-prompt 'Be concise and direct. Give brief responses unless depth is truly necessary.'" ;;
+    3)  echo "--append-system-prompt 'Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'" ;;
+    *)  echo "--append-system-prompt 'Think carefully through problems. Balance thoroughness with conciseness.'" ;;
+  esac
+}
+
+thinking_label() {
+  case "$1" in
+    1) echo "1 (light)" ;;
+    3) echo "3 (high)" ;;
+    *) echo "2 (medium)" ;;
+  esac
+}
+
+echo ""
+echo "── Thinking Level ────────────────────────────────────────────────────────"
+echo "  1 = light   2 = medium (default)   3 = high"
+echo ""
+read -p "  Agent 1 (Orchestrator) [1/2/3]: " RAW1
+read -p "  Agent 2               [1/2/3]: " RAW2
+read -p "  Agent 3               [1/2/3]: " RAW3
+read -p "  Agent 4               [1/2/3]: " RAW4
+echo "──────────────────────────────────────────────────────────────────────────"
+echo ""
+
+# Strip whitespace and default to 2
+LEVEL1=$(echo "${RAW1:-2}" | tr -d '[:space:]')
+LEVEL2=$(echo "${RAW2:-2}" | tr -d '[:space:]')
+LEVEL3=$(echo "${RAW3:-2}" | tr -d '[:space:]')
+LEVEL4=$(echo "${RAW4:-2}" | tr -d '[:space:]')
+
+FLAG1=$(thinking_flag "$LEVEL1"); FLAG2=$(thinking_flag "$LEVEL2")
+FLAG3=$(thinking_flag "$LEVEL3"); FLAG4=$(thinking_flag "$LEVEL4")
+
+LABEL1=$(thinking_label "$LEVEL1"); LABEL2=$(thinking_label "$LEVEL2")
+LABEL3=$(thinking_label "$LEVEL3"); LABEL4=$(thinking_label "$LEVEL4")
+
+CMD1="claude --model claude-opus-4-6 $FLAG1"; CMD2="claude --model claude-opus-4-6 $FLAG2"
+CMD3="claude --model claude-opus-4-6 $FLAG3"; CMD4="claude --model claude-opus-4-6 $FLAG4"
+
 echo "Launching agent workspace in iTerm2..."
 
 SESSION_IDS=$(osascript -e "
@@ -47,18 +91,18 @@ tell application \"iTerm2\"
       set agent4Session to (split horizontally with default profile)
     end tell
 
-    -- Label and start Claude in each pane with agent announcement
+    -- Label and start Claude in each pane
     tell agent1Session
-      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 1 — ORCHESTRATOR (top-left)' && echo '═══════════════════════════════════════' && claude -p 'You are Agent 1. Read agent1.md for your instructions.'\"
+      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 1 — ORCHESTRATOR  thinking: $LABEL1' && echo '═══════════════════════════════════════' && $CMD1\"
     end tell
     tell agent2Session
-      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 2 (top-right)' && echo '═══════════════════════════════════════' && claude -p 'You are Agent 2. Read agent2.md for your instructions.'\"
+      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 2  thinking: $LABEL2' && echo '═══════════════════════════════════════' && $CMD2\"
     end tell
     tell agent3Session
-      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 3 (bottom-left)' && echo '═══════════════════════════════════════' && claude -p 'You are Agent 3. Read agent3.md for your instructions.'\"
+      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 3  thinking: $LABEL3' && echo '═══════════════════════════════════════' && $CMD3\"
     end tell
     tell agent4Session
-      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 4 (bottom-right)' && echo '═══════════════════════════════════════' && claude -p 'You are Agent 4. Read agent4.md for your instructions.'\"
+      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 4  thinking: $LABEL4' && echo '═══════════════════════════════════════' && $CMD4\"
     end tell
 
     -- Return session IDs
@@ -89,10 +133,10 @@ echo ""
 echo "✓ iTerm2 workspace launched"
 echo "✓ pane-config.sh written"
 echo ""
-echo "  Agent 1 (you): $ID1"
-echo "  Agent 2:       $ID2"
-echo "  Agent 3:       $ID3"
-echo "  Agent 4:       $ID4"
+echo "  Agent 1 (you): $ID1  [thinking: $LABEL1]"
+echo "  Agent 2:       $ID2  [thinking: $LABEL2]"
+echo "  Agent 3:       $ID3  [thinking: $LABEL3]"
+echo "  Agent 4:       $ID4  [thinking: $LABEL4]"
 echo ""
 echo "Claude is starting in each pane."
 echo "You are Agent 1 — the orchestrator. Start by giving it a Jira ticket URL."
