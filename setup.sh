@@ -18,6 +18,15 @@
 #   pane-config.sh              iTerm2 session ID map (populated by launch.sh)
 #   .mcp.json                   Codex MCP server config (for /codex-collab)
 #   .claude/settings.local.json Pre-approved permissions
+#
+# Pane layout (set by launch.sh):
+#   ┌─────────────┬─────────────┐
+#   │  Agent 1    │  Agent 2    │
+#   │  (top-left) │ (top-right) │
+#   ├─────────────┼─────────────┤
+#   │  Agent 3    │  Agent 4    │
+#   │(bottom-left)│(bottom-right│
+#   └─────────────┴─────────────┘
 
 set -e
 

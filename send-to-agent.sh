@@ -1,6 +1,5 @@
 #!/bin/bash
 # Usage: ./send-to-agent.sh <agent_number> "<message>"
-# Example: ./send-to-agent.sh 2 "Please run your tests and update agent2.md"
 
 AGENT=$1
 MESSAGE=$2
@@ -10,11 +9,9 @@ if [ -z "$AGENT" ] || [ -z "$MESSAGE" ]; then
   exit 1
 fi
 
-# Load session UUIDs
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/pane-config.sh"
 
-# Pick the right session ID
 case $AGENT in
   1) SESSION_ID="$AGENT_1_SESSION" ;;
   2) SESSION_ID="$AGENT_2_SESSION" ;;
@@ -26,10 +23,14 @@ case $AGENT in
     ;;
 esac
 
-# Escape message for AppleScript
+if [ -z "$SESSION_ID" ]; then
+  echo "Error: No session ID for Agent $AGENT. Run ./launch.sh first."
+  exit 1
+fi
+
 ESCAPED_MESSAGE=$(echo "$MESSAGE" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
 
-osascript <<EOF
+osascript << APPLESCRIPT
 tell application "iTerm2"
   repeat with w in windows
     repeat with t in tabs of w
@@ -44,6 +45,6 @@ tell application "iTerm2"
     end repeat
   end repeat
 end tell
-EOF
+APPLESCRIPT
 
 echo "Message sent to Agent $AGENT (session $SESSION_ID)"

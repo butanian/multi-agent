@@ -22,8 +22,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "Launching agent workspace in iTerm2..."
 
-SESSION_IDS=$(osascript << APPLESCRIPT
-tell application "iTerm2"
+SESSION_IDS=$(osascript -e "
+tell application \"iTerm2\"
   activate
 
   -- Create a new window
@@ -32,33 +32,33 @@ tell application "iTerm2"
   tell newWindow
     set agent1Session to current session of current tab
 
-    -- Split right → Agent 2
+    -- Split right -> Agent 2
     tell agent1Session
       set agent2Session to (split vertically with default profile)
     end tell
 
-    -- Split Agent 1 down → Agent 3
+    -- Split Agent 1 down -> Agent 3
     tell agent1Session
       set agent3Session to (split horizontally with default profile)
     end tell
 
-    -- Split Agent 2 down → Agent 4
+    -- Split Agent 2 down -> Agent 4
     tell agent2Session
       set agent4Session to (split horizontally with default profile)
     end tell
 
-    -- Label and start Claude in each pane
+    -- Label and start Claude in each pane with agent announcement
     tell agent1Session
-      write text "printf '\\033]0;Agent 1 — Orchestrator\\007' && cd '$SCRIPT_DIR' && claude"
+      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 1 — ORCHESTRATOR (top-left)' && echo '═══════════════════════════════════════' && claude -p 'You are Agent 1. Read agent1.md for your instructions.'\"
     end tell
     tell agent2Session
-      write text "printf '\\033]0;Agent 2\\007' && cd '$SCRIPT_DIR' && claude"
+      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 2 (top-right)' && echo '═══════════════════════════════════════' && claude -p 'You are Agent 2. Read agent2.md for your instructions.'\"
     end tell
     tell agent3Session
-      write text "printf '\\033]0;Agent 3\\007' && cd '$SCRIPT_DIR' && claude"
+      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 3 (bottom-left)' && echo '═══════════════════════════════════════' && claude -p 'You are Agent 3. Read agent3.md for your instructions.'\"
     end tell
     tell agent4Session
-      write text "printf '\\033]0;Agent 4\\007' && cd '$SCRIPT_DIR' && claude"
+      write text \"cd '$SCRIPT_DIR' && echo '═══════════════════════════════════════' && echo '  AGENT 4 (bottom-right)' && echo '═══════════════════════════════════════' && claude -p 'You are Agent 4. Read agent4.md for your instructions.'\"
     end tell
 
     -- Return session IDs
@@ -67,11 +67,10 @@ tell application "iTerm2"
     set id3 to unique id of agent3Session
     set id4 to unique id of agent4Session
 
-    return id1 & "," & id2 & "," & id3 & "," & id4
+    return id1 & \",\" & id2 & \",\" & id3 & \",\" & id4
   end tell
 end tell
-APPLESCRIPT
-)
+")
 
 # Parse the four UUIDs
 IFS=',' read -r ID1 ID2 ID3 ID4 <<< "$SESSION_IDS"
