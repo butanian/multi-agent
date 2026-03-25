@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./send-to-agent.sh:*)"
+    ]
+  }
+}
