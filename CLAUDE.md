@@ -24,6 +24,8 @@ Sub-agents are invisible child processes — the other agents in their iTerm2 pa
 
 This types the message directly into the target agent's iTerm2 pane via AppleScript.
 
+Each agent pane has `SWARM_ID` set in its environment (e.g. `SWARM_ID=1`). This is used automatically by `send-to-agent.sh` to target the correct swarm's panes — you do not need to pass it manually.
+
 The built-in Agent tool is still fine for local research tasks (exploring the codebase, searching files, etc.) — just never use it as a substitute for talking to the real Agents 2, 3, or 4.
 
 ## Agent roles
