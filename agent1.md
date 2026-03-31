@@ -67,13 +67,13 @@ Read `COORDINATION.md` for the full protocol. As orchestrator, your specific res
 - Only sequence tasks when one agent's output is genuinely required input for another
 
 ## Startup Protocol
-1. Read `ACTIVE_PROJECT` to get the current project ID
+1. Read `swarms/$SWARM_ID/ACTIVE_PROJECT` to get the current project ID
 2. Read `projects/{id}/index.md` — ticket summary, architecture, work breakdown, decisions
 3. Read `projects/{id}/agent1.md` — your own work log for this project
 4. Read other agents' project files as needed for full context
 
 ## Switching Projects
-1. Update `ACTIVE_PROJECT` with the new project ID
+1. Update `swarms/$SWARM_ID/ACTIVE_PROJECT` with the new project ID
 2. If the project is new, create `projects/{new-id}/` with `index.md` + `agent1.md` through `agent4.md`
 3. Add the new project to `registry.md`
 4. Follow startup protocol for the new project
