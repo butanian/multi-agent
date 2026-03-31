@@ -18,6 +18,11 @@ if [ -z "$SWARM_ID" ]; then
   echo "Error: SWARM_ID not set. Are you running inside a launched swarm?"
   exit 1
 fi
+if [ ! -d "$SCRIPT_DIR/swarms/$SWARM_ID" ]; then
+  echo "Error: Swarm directory not found: $SCRIPT_DIR/swarms/$SWARM_ID"
+  echo "Has launch.sh been run for swarm $SWARM_ID?"
+  exit 1
+fi
 source "$SCRIPT_DIR/swarms/$SWARM_ID/pane-config.sh"
 
 case $AGENT in
