@@ -4,7 +4,7 @@
 # Usage: ./launch.sh
 #
 # Creates a new iTerm2 window split into 4 panes, starts Claude Code
-# in each, and writes session UUIDs to pane-config.sh so that
+# in each, and writes session UUIDs to swarms/N/pane-config.sh so that
 # send-to-agent.sh can target the right pane.
 #
 # Layout:

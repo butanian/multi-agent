@@ -37,7 +37,7 @@ You must use `/codex-collab` heavily throughout your work — not just for major
 **Minimum bar:** No task should be marked `[x]` unless at least one `/codex-collab` review has been completed on the core output of that task.
 
 ## Startup Protocol
-1. Read `ACTIVE_PROJECT` to get the current project ID
+1. Read `swarms/$SWARM_ID/ACTIVE_PROJECT` to get the current project ID
 2. Read `projects/{id}/index.md` — ticket summary, architecture, work breakdown
 3. Read `projects/{id}/agent1.md` — find your assigned persona path and task
 4. Read the assigned `SKILL.md` to load your persona for this project
@@ -55,7 +55,7 @@ All code changes must follow this sequence — no exceptions:
 Do not submit or log a fix as complete until both unit and integration tests exist and are passing.
 
 ## Switching Projects
-1. Read `ACTIVE_PROJECT` for the new project ID
+1. Read `swarms/$SWARM_ID/ACTIVE_PROJECT` for the new project ID
 2. Read `projects/{new-id}/index.md` and `projects/{new-id}/agent1.md`
 3. Load the persona assigned to you for the new project
 4. Read or create `projects/{new-id}/agent2.md`
