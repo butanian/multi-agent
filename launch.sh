@@ -33,46 +33,8 @@ if [ -d "$SCRIPT_DIR/swarms" ]; then
   done
 fi
 
-# ── Thinking level configuration ───────────────────────────────────────────────
-# 1 = light, 2 = medium, 3 = high
-thinking_flag() {
-  case "$1" in
-    1)  echo "--append-system-prompt 'Be concise and direct. Give brief responses unless depth is truly necessary.'" ;;
-    3)  echo "--append-system-prompt 'Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'" ;;
-    *)  echo "--append-system-prompt 'Think carefully through problems. Balance thoroughness with conciseness.'" ;;
-  esac
-}
-
-thinking_label() {
-  case "$1" in
-    1) echo "1 (light)" ;;
-    3) echo "3 (high)" ;;
-    *) echo "2 (medium)" ;;
-  esac
-}
-
-echo ""
-echo "── Thinking Level ────────────────────────────────────────────────────────"
-echo "  1 = light   2 = medium (default)   3 = high"
-echo ""
-read -p "  Agent 1 (Orchestrator) [1/2/3]: " RAW1
-read -p "  Agent 2               [1/2/3]: " RAW2
-read -p "  Agent 3               [1/2/3]: " RAW3
-read -p "  Agent 4               [1/2/3]: " RAW4
-echo "──────────────────────────────────────────────────────────────────────────"
-echo ""
-
-# Strip whitespace and default to 2
-LEVEL1=$(echo "${RAW1:-2}" | tr -d '[:space:]')
-LEVEL2=$(echo "${RAW2:-2}" | tr -d '[:space:]')
-LEVEL3=$(echo "${RAW3:-2}" | tr -d '[:space:]')
-LEVEL4=$(echo "${RAW4:-2}" | tr -d '[:space:]')
-
-FLAG1=$(thinking_flag "$LEVEL1"); FLAG2=$(thinking_flag "$LEVEL2")
-FLAG3=$(thinking_flag "$LEVEL3"); FLAG4=$(thinking_flag "$LEVEL4")
-
-LABEL1=$(thinking_label "$LEVEL1"); LABEL2=$(thinking_label "$LEVEL2")
-LABEL3=$(thinking_label "$LEVEL3"); LABEL4=$(thinking_label "$LEVEL4")
+# ── Thinking: always level 3 (high) ───────────────────────────────────────────
+THINK_FLAG="--append-system-prompt 'Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'"
 
 # ── Permissions ────────────────────────────────────────────────────────────────
 echo "── Permissions ───────────────────────────────────────────────────────────"
@@ -82,15 +44,6 @@ echo ""
 SKIP_PERMS=$(echo "${RAW_SKIP_PERMS:-n}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
 PERMS_FLAG=""
 [[ "$SKIP_PERMS" == "y" ]] && PERMS_FLAG="--dangerously-skip-permissions"
-
-# ── Skip agents ────────────────────────────────────────────────────────────────
-echo "── Skip Agents ───────────────────────────────────────────────────────────"
-echo "  Enter agent numbers to skip (e.g. 3,4) or leave blank to launch all"
-echo ""
-read -p "  Skip agents [blank = none]: " RAW_SKIP_AGENTS
-echo "──────────────────────────────────────────────────────────────────────────"
-echo ""
-SKIP_AGENTS=$(echo "${RAW_SKIP_AGENTS}" | tr -d '[:space:]')
 
 # ── Project Setup ──────────────────────────────────────────────────────────────
 echo "── Project Setup ─────────────────────────────────────────────────────────"
@@ -133,13 +86,7 @@ if [ "$PROJECT_MODE" = "r" ]; then
   echo ""
 fi
 
-should_skip() {
-  local n="$1"
-  [[ ",$SKIP_AGENTS," == *",$n,"* ]]
-}
-
-CMD1="claude --model claude-opus-4-6 $PERMS_FLAG $FLAG1"; CMD2="claude --model claude-opus-4-6 $PERMS_FLAG $FLAG2"
-CMD3="claude --model claude-opus-4-6 $PERMS_FLAG $FLAG3"; CMD4="claude --model claude-opus-4-6 $PERMS_FLAG $FLAG4"
+CMD="claude --model claude-opus-4-6 $PERMS_FLAG $THINK_FLAG"
 
 echo "Launching agent workspace in iTerm2..."
 
@@ -170,16 +117,16 @@ tell application \"iTerm2\"
 
     -- Label and start Claude in each pane
     tell agent1Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 1 — ORCHESTRATOR  thinking: $LABEL1' && echo '═══════════════════════════════════════'$(should_skip 1 || echo " && $CMD1")\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 1 — ORCHESTRATOR  thinking: 3 (high)' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
     tell agent2Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 2  thinking: $LABEL2' && echo '═══════════════════════════════════════'$(should_skip 2 || echo " && $CMD2")\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 2  thinking: 3 (high)' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
     tell agent3Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 3  thinking: $LABEL3' && echo '═══════════════════════════════════════'$(should_skip 3 || echo " && $CMD3")\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 3  thinking: 3 (high)' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
     tell agent4Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 4  thinking: $LABEL4' && echo '═══════════════════════════════════════'$(should_skip 4 || echo " && $CMD4")\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 4  thinking: 3 (high)' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
 
     -- Return session IDs
@@ -211,7 +158,6 @@ EOF
 
 PERMS_LABEL="no"
 [[ "$SKIP_PERMS" == "y" ]] && PERMS_LABEL="YES (--dangerously-skip-permissions)"
-SKIP_LABEL="${SKIP_AGENTS:-none}"
 
 echo ""
 echo "✓ iTerm2 workspace launched"
@@ -220,14 +166,14 @@ echo ""
 echo "  Swarm:               $SWARM_ID"
 echo "  Active project:      ${ACTIVE_PROJECT_VALUE:-<new — Agent 1 will set>}"
 echo "  Permissions skipped: $PERMS_LABEL"
-echo "  Agents skipped:      $SKIP_LABEL"
+echo "  Thinking:            3 (high)"
 echo ""
-echo "  Agent 1 (you): $ID1  [thinking: $LABEL1]$(should_skip 1 && echo "  [SKIPPED]")"
-echo "  Agent 2:       $ID2  [thinking: $LABEL2]$(should_skip 2 && echo "  [SKIPPED]")"
-echo "  Agent 3:       $ID3  [thinking: $LABEL3]$(should_skip 3 && echo "  [SKIPPED]")"
-echo "  Agent 4:       $ID4  [thinking: $LABEL4]$(should_skip 4 && echo "  [SKIPPED]")"
+echo "  Agent 1 (you): $ID1"
+echo "  Agent 2:       $ID2"
+echo "  Agent 3:       $ID3"
+echo "  Agent 4:       $ID4"
 echo ""
-echo "Claude is starting in each active pane."
+echo "Claude is starting in all 4 panes."
 echo "You are Agent 1 — the orchestrator. Start by giving it a Jira ticket URL."
 echo ""
 echo "To send a message to another agent:"
