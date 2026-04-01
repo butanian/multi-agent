@@ -3,5 +3,20 @@
     "allow": [
       "Bash(./send-to-agent.sh:*)"
     ]
+  },
+  "effortLevel": "high",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/aneesh.butani/Development/multi-agent/.claude/hooks/startup.sh",
+            "timeout": 10,
+            "statusMessage": "Loading agent startup protocol..."
+          }
+        ]
+      }
+    ]
   }
 }

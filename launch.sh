@@ -115,18 +115,18 @@ tell application \"iTerm2\"
       set agent4Session to (split horizontally with default profile)
     end tell
 
-    -- Label and start Claude in each pane
+    -- Label and start Claude in each pane (AGENT_NUMBER exported so startup hook knows which agent this is)
     tell agent1Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 1 — ORCHESTRATOR  thinking: 3 (high)' && echo '═══════════════════════════════════════' && $CMD\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=1 && echo '═══════════════════════════════════════' && echo '  AGENT 1 — ORCHESTRATOR  thinking: high' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
     tell agent2Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 2  thinking: 3 (high)' && echo '═══════════════════════════════════════' && $CMD\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=2 && echo '═══════════════════════════════════════' && echo '  AGENT 2  thinking: high' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
     tell agent3Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 3  thinking: 3 (high)' && echo '═══════════════════════════════════════' && $CMD\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=3 && echo '═══════════════════════════════════════' && echo '  AGENT 3  thinking: high' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
     tell agent4Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && echo '═══════════════════════════════════════' && echo '  AGENT 4  thinking: 3 (high)' && echo '═══════════════════════════════════════' && $CMD\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=4 && echo '═══════════════════════════════════════' && echo '  AGENT 4  thinking: high' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
 
     -- Return session IDs
@@ -166,7 +166,7 @@ echo ""
 echo "  Swarm:               $SWARM_ID"
 echo "  Active project:      ${ACTIVE_PROJECT_VALUE:-<new — Agent 1 will set>}"
 echo "  Permissions skipped: $PERMS_LABEL"
-echo "  Thinking:            3 (high)"
+echo "  Thinking:            high"
 echo ""
 echo "  Agent 1 (you): $ID1"
 echo "  Agent 2:       $ID2"
@@ -174,7 +174,26 @@ echo "  Agent 3:       $ID3"
 echo "  Agent 4:       $ID4"
 echo ""
 echo "Claude is starting in all 4 panes."
-echo "You are Agent 1 — the orchestrator. Start by giving it a Jira ticket URL."
 echo ""
-echo "To send a message to another agent:"
+
+# ── Startup kick ───────────────────────────────────────────────────────────────
+# The SessionStart hook injects startup instructions into each agent's context,
+# but the model still needs a user message to begin acting on them.
+# We wait for Claude to fully initialize (MCP servers, plugins, etc.) then send
+# a kick message to each pane so they immediately execute the startup protocol.
+echo "Waiting 20s for Claude to initialize in all panes..."
+sleep 20
+
+echo "Sending startup kick to all agents..."
+export SWARM_ID
+./send-to-agent.sh 1 "Execute your startup protocol now."
+./send-to-agent.sh 2 "Execute your startup protocol now."
+./send-to-agent.sh 3 "Execute your startup protocol now."
+./send-to-agent.sh 4 "Execute your startup protocol now."
+
+echo ""
+echo "✓ Startup kicks sent — agents are now executing their protocols."
+echo "  Watch all 4 panes to see them read files and send confirmations to each other."
+echo ""
+echo "To send a message to an agent later:"
 echo "  ./send-to-agent.sh 2 \"Your message here\""
