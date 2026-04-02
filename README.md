@@ -58,12 +58,13 @@ codex login
 ./launch.sh
 ```
 
-`launch.sh` will prompt you for two things:
+`launch.sh` will prompt you for:
 
 1. **Skip permissions?** — type `y` to pass `--dangerously-skip-permissions` to all agents
 2. **New or resume?** — type `n` to start fresh, or `r` to pick an existing project from a numbered list
+   - If `n`: prompted for a project name. Include the Jira ticket if there is one — e.g. `GBO-123: add-checkout-flow`. The name is normalized into a safe project ID automatically.
 
-It then opens iTerm2 with 4 panes, starts Claude in each pane with `SWARM_ID` and `AGENT_NUMBER` set, writes session IDs to `swarms/<N>/pane-config.sh`, and after 10 seconds sends a startup kick to all agents so they immediately execute their startup protocol.
+It then opens iTerm2 with 4 panes, starts Claude in each pane with `SWARM_ID` and `AGENT_NUMBER` set, and writes session IDs to `swarms/<N>/pane-config.sh`. After 10 seconds it sends a startup kick to all agents. Agent 1 then runs a comms check — sending a ping to each worker and waiting for all three to confirm before proceeding.
 
 ## Swarms
 
