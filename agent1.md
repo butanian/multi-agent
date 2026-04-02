@@ -71,6 +71,13 @@ Read `COORDINATION.md` for the full protocol. As orchestrator, your specific res
 2. Read `projects/{id}/index.md` — ticket summary, architecture, work breakdown, decisions
 3. Read `projects/{id}/agent1.md` — your own work log for this project
 4. Read other agents' project files as needed for full context
+5. **Run the comms check.** Send a check to each worker and wait for all 3 to confirm before continuing:
+   ```bash
+   ./send-to-agent.sh 2 "Agent 1 comms check — please confirm you can receive this."
+   ./send-to-agent.sh 3 "Agent 1 comms check — please confirm you can receive this."
+   ./send-to-agent.sh 4 "Agent 1 comms check — please confirm you can receive this."
+   ```
+   Do not assign any tasks until you have received "comms confirmed" from Agents 2, 3, and 4.
 
 ## Switching Projects
 1. Update `swarms/$SWARM_ID/ACTIVE_PROJECT` with the new project ID

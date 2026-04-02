@@ -33,18 +33,20 @@ On startup, every agent must:
 
 1. **Identify yourself.** Read the banner printed above you in the terminal — it says your agent number.
 2. **Read your agent file** (`agent1.md` through `agent4.md`) and `COORDINATION.md`.
-3. **Send a startup confirmation to every other agent.** Use `./send-to-agent.sh` to message each of the other 3 agents:
-   ```bash
-   ./send-to-agent.sh <N> "Agent <YOUR_NUMBER> online and ready."
-   ```
-   For example, if you are Agent 2, send:
-   ```bash
-   ./send-to-agent.sh 1 "Agent 2 online and ready."
-   ./send-to-agent.sh 3 "Agent 2 online and ready."
-   ./send-to-agent.sh 4 "Agent 2 online and ready."
-   ```
-4. **Wait for the other agents' confirmations to arrive.** You should receive 3 "online and ready" messages. Once you see them, you know the swarm is fully connected.
-5. **Then proceed** with the rest of your agent-specific startup protocol (reading ACTIVE_PROJECT, loading persona, etc.).
+3. **Comms check — Agent 1 initiates, workers respond:**
+   - **If you are Agent 1:** send a comms check to each worker:
+     ```bash
+     ./send-to-agent.sh 2 "Agent 1 comms check — please confirm you can receive this."
+     ./send-to-agent.sh 3 "Agent 1 comms check — please confirm you can receive this."
+     ./send-to-agent.sh 4 "Agent 1 comms check — please confirm you can receive this."
+     ```
+     Then wait until you have received a confirmation reply from all three before proceeding.
+   - **If you are Agent 2, 3, or 4:** wait for Agent 1's comms check to arrive, then immediately reply:
+     ```bash
+     ./send-to-agent.sh 1 "Agent <YOUR_NUMBER> online — comms confirmed."
+     ```
+     Do not proceed with your startup protocol until you have sent this reply.
+4. **Once comms are confirmed**, proceed with the rest of your agent-specific startup protocol (reading ACTIVE_PROJECT, loading persona, etc.).
 
 ## Agent roles
 

@@ -42,6 +42,11 @@ You must use `/codex-collab` heavily throughout your work — not just for major
 3. Read `projects/{id}/agent1.md` — find your assigned persona path and task
 4. Read the assigned `SKILL.md` to load your persona for this project
 5. Read `projects/{id}/agent2.md` — your own work log
+6. **Wait for Agent 1's comms check**, then reply immediately:
+   ```bash
+   ./send-to-agent.sh 1 "Agent 2 online — comms confirmed."
+   ```
+   Do not proceed until you have sent this reply.
 
 ## TDD Ground Rules
 

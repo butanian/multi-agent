@@ -55,7 +55,16 @@ echo ""
 PROJECT_MODE=$(echo "${RAW_PROJECT_MODE:-n}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
 
 ACTIVE_PROJECT_VALUE=""
-if [ "$PROJECT_MODE" = "r" ]; then
+if [ "$PROJECT_MODE" = "n" ]; then
+  echo "  Project name (e.g. GBO-123: add-checkout-flow):"
+  read -p "  > " RAW_PROJECT_NAME
+  ACTIVE_PROJECT_VALUE=$(echo "${RAW_PROJECT_NAME}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9:_-]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//')
+  if [ -z "$ACTIVE_PROJECT_VALUE" ]; then
+    ACTIVE_PROJECT_VALUE="project-$(date +%Y%m%d-%H%M%S)"
+  fi
+  echo "  Project ID: $ACTIVE_PROJECT_VALUE"
+  echo ""
+elif [ "$PROJECT_MODE" = "r" ]; then
   # List projects/ subdirs excluding inbox
   PROJECT_LIST=()
   if [ -d "$SCRIPT_DIR/projects" ]; then
