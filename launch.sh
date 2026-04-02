@@ -181,8 +181,8 @@ echo ""
 # but the model still needs a user message to begin acting on them.
 # We wait for Claude to fully initialize (MCP servers, plugins, etc.) then send
 # a kick message to each pane so they immediately execute the startup protocol.
-echo "Waiting 20s for Claude to initialize in all panes..."
-sleep 20
+echo "Waiting 10s for Claude to initialize in all panes..."
+sleep 10
 
 echo "Sending startup kick to all agents..."
 export SWARM_ID

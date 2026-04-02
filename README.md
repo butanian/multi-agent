@@ -1,31 +1,31 @@
 # multi-agent
 
-A multi-agent Claude Code workspace with 4 coordinated agents running in iTerm2.
+A multi-agent Claude Code workspace where 4 coordinated agents run simultaneously in iTerm2 panes. Multiple independent **swarms** can run at the same time, each with its own isolated session state.
 
 ## Pane Layout
 
 ```
 ┌─────────────┬─────────────┐
 │  Agent 1    │  Agent 2    │
-│  (top-left) │ (top-right) │
+│(orchestrator)│             │
 ├─────────────┼─────────────┤
 │  Agent 3    │  Agent 4    │
-│(bottom-left)│(bottom-right)│
+│             │             │
 └─────────────┴─────────────┘
 ```
 
-- **Agent 1** — Orchestrator: breaks down work, assigns tasks, coordinates
-- **Agents 2, 3, 4** — Workers: receive personas and tasks from Agent 1
+- **Agent 1** — Orchestrator: breaks down work, assigns personas, coordinates
+- **Agents 2, 3, 4** — Workers: receive tasks and personas from Agent 1
 
 ## Prerequisites
 
 - macOS with iTerm2 installed
 - Claude Code CLI (`claude`) installed and authenticated
-- Node.js/npm (for Codex CLI)
+- Node.js/npm (for Codex CLI — used by the `/codex-collab` skill)
 
 ## Setup
 
-### 1. Run the setup script
+### 1. Run the setup script (one-time)
 
 ```bash
 ./setup.sh [workspace-dir] [persona-library-path]
@@ -40,29 +40,49 @@ Examples:
 This creates:
 - `agent1.md` – `agent4.md` — Agent instruction files
 - `COORDINATION.md` — Shared coordination protocol
-- `ACTIVE_PROJECT` — Tracks the current project
 - `registry.md` — Project registry
 - `projects/` — Per-project work logs
 - `send-to-agent.sh` — Message passing between agents
-- `pane-config.sh` — iTerm2 session ID map
 - `.mcp.json` — Codex MCP server config
 - `.claude/settings.local.json` — Pre-approved permissions
 
-### 2. Authenticate Codex (one-time)
+### 2. Authenticate Codex (one-time per team member)
 
 ```bash
 codex login
 ```
 
-This opens a browser flow for authentication. Each team member must do this once.
-
-### 3. Launch the workspace
+### 3. Launch a swarm
 
 ```bash
 ./launch.sh
 ```
 
-This opens iTerm2 with 4 panes, starts Claude in each, and configures message routing. Each agent will display a banner announcing its number and position.
+`launch.sh` will prompt you for two things:
+
+1. **Skip permissions?** — type `y` to pass `--dangerously-skip-permissions` to all agents
+2. **New or resume?** — type `n` to start fresh, or `r` to pick an existing project from a numbered list
+
+It then opens iTerm2 with 4 panes, starts Claude in each pane with `SWARM_ID` and `AGENT_NUMBER` set, writes session IDs to `swarms/<N>/pane-config.sh`, and after 10 seconds sends a startup kick to all agents so they immediately execute their startup protocol.
+
+## Swarms
+
+Each `./launch.sh` run creates a new **swarm** — an independent group of 4 agents with its own directory:
+
+```
+swarms/
+  1/
+    pane-config.sh    # iTerm2 session UUIDs for this swarm's 4 panes
+    ACTIVE_PROJECT    # Current project ID (or empty = new)
+  2/
+    pane-config.sh
+    ACTIVE_PROJECT
+  ...
+```
+
+Swarm numbers are auto-assigned (next available integer). Multiple swarms can be active simultaneously, each working on a different project.
+
+`SWARM_ID` is exported as an environment variable in every agent pane. `send-to-agent.sh` reads it automatically — you don't pass it manually.
 
 ## Usage
 
@@ -72,16 +92,18 @@ This opens iTerm2 with 4 panes, starts Claude in each, and configures message ro
 ./send-to-agent.sh <agent_number> "<message>"
 ```
 
+`SWARM_ID` must be set in your environment (it is automatically set in each agent pane by `launch.sh`). Short messages (≤500 chars) are typed directly into the target pane. Longer messages are written to `projects/inbox/` and the agent is told to read the file.
+
 Example:
 ```bash
-./send-to-agent.sh 2 "Your task: implement the login API. Persona: core/backend-agent/SKILL.md"
+./send-to-agent.sh 2 "Your task: implement the login API. Persona: core/backend-agent/SKILL.md. Work breakdown in projects/auth-v2/index.md."
 ```
 
 ### Starting a project
 
-1. Give Agent 1 a Jira ticket URL or project description
-2. Agent 1 breaks down work and assigns tasks to Agents 2-4
-3. Agents signal completion/blockers back to Agent 1
+1. Give Agent 1 a ticket URL or project description
+2. Agent 1 breaks down work and assigns tasks + personas to Agents 2–4
+3. Agents signal completion or blockers back to Agent 1
 4. Agent 1 coordinates until the project is complete
 
 ### Task status markers
@@ -93,14 +115,26 @@ Example:
 | `[x]` | Done |
 | `[!]` | Blocked — needs Agent 1 |
 
-## Files
+## File Structure
 
-| File | Purpose |
-|------|---------|
-| `ACTIVE_PROJECT` | Current project ID (or `NONE`) |
-| `registry.md` | List of all projects and their status |
-| `projects/{id}/index.md` | Project overview, work breakdown, decisions |
-| `projects/{id}/agent1.md` | Agent 1's work log for this project |
-| `projects/{id}/agent2.md` | Agent 2's work log for this project |
-| `projects/{id}/agent3.md` | Agent 3's work log for this project |
-| `projects/{id}/agent4.md` | Agent 4's work log for this project |
+```
+swarms/<N>/
+  pane-config.sh          iTerm2 session IDs for this swarm
+  ACTIVE_PROJECT          Current project ID for this swarm
+
+projects/
+  inbox/                  Long messages routed via file (auto-created)
+  {id}/
+    index.md              Project overview, work breakdown, decisions
+    agent1.md             Agent 1's work log
+    agent2.md             Agent 2's work log
+    agent3.md             Agent 3's work log
+    agent4.md             Agent 4's work log
+
+agent1.md – agent4.md     Agent instruction files (workspace-level)
+COORDINATION.md           Shared coordination protocol
+registry.md               All projects and their status
+send-to-agent.sh          Message passing script
+launch.sh                 Opens iTerm2 and starts a new swarm
+setup.sh                  One-time workspace setup
+```
