@@ -1,12 +1,9 @@
 #!/bin/bash
 # Usage: ./send-to-agent.sh <agent_number> "<message>"
-#
-# Short messages (<=500 chars) are typed directly into the agent's pane.
-# Long messages are written to a file and the agent is told to read it.
 
 AGENT=$1
 MESSAGE=$2
-MAX_DIRECT_LEN=500
+LARGE_MSG_THRESHOLD=1000
 
 if [ -z "$AGENT" ] || [ -z "$MESSAGE" ]; then
   echo "Usage: $0 <agent_number> \"<message>\""
@@ -14,15 +11,12 @@ if [ -z "$AGENT" ] || [ -z "$MESSAGE" ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 if [ -z "$SWARM_ID" ]; then
-  echo "Error: SWARM_ID not set. Are you running inside a launched swarm?"
+  echo "Error: SWARM_ID not set. Export SWARM_ID before calling this script."
   exit 1
 fi
-if [ ! -d "$SCRIPT_DIR/swarms/$SWARM_ID" ]; then
-  echo "Error: Swarm directory not found: $SCRIPT_DIR/swarms/$SWARM_ID"
-  echo "Has launch.sh been run for swarm $SWARM_ID?"
-  exit 1
-fi
+
 source "$SCRIPT_DIR/swarms/$SWARM_ID/pane-config.sh"
 
 case $AGENT in
@@ -41,51 +35,34 @@ if [ -z "$SESSION_ID" ]; then
   exit 1
 fi
 
-MSG_LEN=${#MESSAGE}
-
-if [ "$MSG_LEN" -le "$MAX_DIRECT_LEN" ]; then
-  # Short message — type directly
-  ESCAPED_MESSAGE=$(echo "$MESSAGE" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
-
-  osascript << APPLESCRIPT
-tell application "iTerm2"
-  repeat with w in windows
-    repeat with t in tabs of w
-      repeat with s in sessions of t
-        if unique id of s is "$SESSION_ID" then
-          tell s
-            write text "$ESCAPED_MESSAGE"
-          end tell
-          return
-        end if
-      end repeat
-    end repeat
-  end repeat
-end tell
-APPLESCRIPT
-
-  echo "Message sent to Agent $AGENT (direct, ${MSG_LEN} chars)"
+# For large messages, write to a persistent file and send a reference instead
+if [ ${#MESSAGE} -gt $LARGE_MSG_THRESHOLD ]; then
+  CONTENT_FILE=$(mktemp /tmp/agent_content_XXXXXX.md)
+  printf '%s' "$MESSAGE" > "$CONTENT_FILE"
+  SEND_MSG="[Message too large for inline send — read your full instructions from: $CONTENT_FILE]"
+  echo "Content saved to $CONTENT_FILE (${#MESSAGE} chars)"
 else
-  # Long message — write to file, send short pointer
-  INBOX_DIR="$SCRIPT_DIR/projects/inbox"
-  mkdir -p "$INBOX_DIR"
+  SEND_MSG="$MESSAGE"
+fi
 
-  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-  MSG_FILE="$INBOX_DIR/agent${AGENT}-${TIMESTAMP}.md"
+# Write message to a temp file to avoid AppleScript string escaping issues
+# (special chars like $, \, ", backticks in the message would break heredoc interpolation)
+TMPFILE=$(mktemp)
+printf '%s' "$SEND_MSG" > "$TMPFILE"
 
-  echo "$MESSAGE" > "$MSG_FILE"
+osascript << APPLESCRIPT
+set msgFile to "$TMPFILE"
+set fileRef to open for access (POSIX file msgFile)
+set msgContent to read fileRef
+close access fileRef
 
-  POINTER="Read your instructions from Agent 1 at: $MSG_FILE — read that file and follow the instructions inside."
-  ESCAPED_POINTER=$(echo "$POINTER" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
-
-  osascript << APPLESCRIPT
 tell application "iTerm2"
   repeat with w in windows
     repeat with t in tabs of w
       repeat with s in sessions of t
         if unique id of s is "$SESSION_ID" then
           tell s
-            write text "$ESCAPED_POINTER"
+            write text msgContent
           end tell
           return
         end if
@@ -95,5 +72,5 @@ tell application "iTerm2"
 end tell
 APPLESCRIPT
 
-  echo "Message sent to Agent $AGENT (via file, ${MSG_LEN} chars -> $MSG_FILE)"
-fi
+rm -f "$TMPFILE"
+echo "Message sent to Agent $AGENT (session $SESSION_ID)"
