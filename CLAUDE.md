@@ -53,6 +53,10 @@ On startup, every agent must:
 - **Agent 1** — Orchestrator: breaks down work, assigns tasks, coordinates. Read `agent1.md`.
 - **Agents 2, 3, 4** — Workers: receive tasks from Agent 1. Read your `agentN.md` file.
 
+## Writing style
+
+Never use em dashes (— or --) in written output. They are a tell that text was written by an LLM. Instead, use a period to break into two sentences, or use a comma. This applies to all generated text: documents, proposals, emails, comments, commit messages, etc.
+
 ## Monitoring other agents
 
 Do not poll agents with messages. Read their work logs at `projects/{id}/agentN.md` to check status. Look for `[!]` (blocked) first, then `[~]` (in progress).

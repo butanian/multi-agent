@@ -62,7 +62,11 @@ tell application "iTerm2"
       repeat with s in sessions of t
         if unique id of s is "$SESSION_ID" then
           tell s
-            write text msgContent
+            write text msgContent without newline
+          end tell
+          delay 0.3
+          tell s
+            write text ""
           end tell
           return
         end if
