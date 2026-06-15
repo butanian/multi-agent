@@ -95,7 +95,7 @@ elif [ "$PROJECT_MODE" = "r" ]; then
   echo ""
 fi
 
-CMD="claude --model claude-opus-4-6 $PERMS_FLAG $THINK_FLAG"
+CMD="claude --model 'claude-opus-4-8[1m]' --effort xhigh $PERMS_FLAG $THINK_FLAG"
 
 echo "Launching agent workspace in iTerm2..."
 
@@ -126,16 +126,16 @@ tell application \"iTerm2\"
 
     -- Label and start Claude in each pane (AGENT_NUMBER exported so startup hook knows which agent this is)
     tell agent1Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=1 && echo '═══════════════════════════════════════' && echo '  AGENT 1 — ORCHESTRATOR  thinking: high' && echo '═══════════════════════════════════════' && $CMD\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=1 && echo '═══════════════════════════════════════' && echo '  AGENT 1 — ORCHESTRATOR  Opus 4.8 (1M) · effort: xhigh' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
     tell agent2Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=2 && echo '═══════════════════════════════════════' && echo '  AGENT 2  thinking: high' && echo '═══════════════════════════════════════' && $CMD\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=2 && echo '═══════════════════════════════════════' && echo '  AGENT 2  Opus 4.8 (1M) · effort: xhigh' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
     tell agent3Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=3 && echo '═══════════════════════════════════════' && echo '  AGENT 3  thinking: high' && echo '═══════════════════════════════════════' && $CMD\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=3 && echo '═══════════════════════════════════════' && echo '  AGENT 3  Opus 4.8 (1M) · effort: xhigh' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
     tell agent4Session
-      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=4 && echo '═══════════════════════════════════════' && echo '  AGENT 4  thinking: high' && echo '═══════════════════════════════════════' && $CMD\"
+      write text \"cd '$SCRIPT_DIR' && export SWARM_ID=$SWARM_ID && export AGENT_NUMBER=4 && echo '═══════════════════════════════════════' && echo '  AGENT 4  Opus 4.8 (1M) · effort: xhigh' && echo '═══════════════════════════════════════' && $CMD\"
     end tell
 
     -- Return session IDs
@@ -175,7 +175,8 @@ echo ""
 echo "  Swarm:               $SWARM_ID"
 echo "  Active project:      ${ACTIVE_PROJECT_VALUE:-<new — Agent 1 will set>}"
 echo "  Permissions skipped: $PERMS_LABEL"
-echo "  Thinking:            high"
+echo "  Model:               claude-opus-4-8[1m]"
+echo "  Effort:              xhigh"
 echo ""
 echo "  Agent 1 (you): $ID1"
 echo "  Agent 2:       $ID2"
