@@ -46,8 +46,10 @@ CALLER_SWARM="${SWARM_ID:-}"
 CALLER_AGENT_ENV="${AGENT_NUMBER:-}"
 
 # ── Defaults (used by --hard when swarms/N/launch.env is missing) ────────────
-DEFAULT_MODEL='claude-opus-4-8[1m]'
-DEFAULT_EFFORT='xhigh'
+DEFAULT_ORCH_MODEL='claude-fable-5'
+DEFAULT_ORCH_EFFORT='xhigh'
+DEFAULT_WORKER_MODEL='claude-opus-5'
+DEFAULT_WORKER_EFFORT='high'
 DEFAULT_THINK_PROMPT='Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'
 
 # Tunables
@@ -310,22 +312,27 @@ fi
 
 # ── --hard only: build the relaunch commands (mirrors launch.sh) ─────────────
 if [ "$MODE" = "hard" ]; then
-  MODEL="$DEFAULT_MODEL"; EFFORT="$DEFAULT_EFFORT"; THINK_PROMPT="$DEFAULT_THINK_PROMPT"
+  MODEL=""; EFFORT=""; THINK_PROMPT="$DEFAULT_THINK_PROMPT"
   SKIP_PERMS="n"; [ "$SKIP_PERMS_FLAG" = 1 ] && SKIP_PERMS="y"
   if [ -f "$SWARM_DIR/launch.env" ]; then
     # shellcheck disable=SC1090
     source "$SWARM_DIR/launch.env"
   else
-    warn "No launch.env; using launch.sh defaults (model=$MODEL effort=$EFFORT skip_perms=$SKIP_PERMS)."
+    warn "No launch.env; using launch.sh defaults (orchestrator=$DEFAULT_ORCH_MODEL/$DEFAULT_ORCH_EFFORT workers=$DEFAULT_WORKER_MODEL/$DEFAULT_WORKER_EFFORT skip_perms=$SKIP_PERMS)."
   fi
   PERMS_FLAG=""; [ "$SKIP_PERMS" = "y" ] && PERMS_FLAG="--dangerously-skip-permissions"
   # Per-agent model/effort: MODEL_n/EFFORT_n from launch.env, else the plain
-  # MODEL/EFFORT an old-format launch.env sets, else the defaults above.
+  # MODEL/EFFORT an old-format launch.env sets, else the per-role defaults above.
   AGENT_MODELS=(); AGENT_EFFORTS=()
   for a in 1 2 3 4; do
+    if [ "$a" = 1 ]; then
+      dm="$DEFAULT_ORCH_MODEL"; de="$DEFAULT_ORCH_EFFORT"
+    else
+      dm="$DEFAULT_WORKER_MODEL"; de="$DEFAULT_WORKER_EFFORT"
+    fi
     mvar="MODEL_$a"; evar="EFFORT_$a"
-    AGENT_MODELS[$a]="${!mvar:-$MODEL}"
-    AGENT_EFFORTS[$a]="${!evar:-$EFFORT}"
+    AGENT_MODELS[$a]="${!mvar:-${MODEL:-$dm}}"
+    AGENT_EFFORTS[$a]="${!evar:-${EFFORT:-$de}}"
   done
 fi
 

@@ -46,24 +46,24 @@ PERMS_FLAG=""
 [[ "$SKIP_PERMS" == "y" ]] && PERMS_FLAG="--dangerously-skip-permissions"
 
 # ── Models ─────────────────────────────────────────────────────────────────────
-MODEL_CHOICES=("claude-opus-4-8[1m]" "claude-sonnet-5" "claude-haiku-4-5")
-DEFAULT_STRONG_MODEL="claude-opus-4-8[1m]"
-DEFAULT_CHEAP_MODEL="claude-sonnet-5"
+MODEL_CHOICES=("claude-fable-5" "claude-opus-5" "claude-sonnet-5" "claude-haiku-4-5")
+DEFAULT_STRONG_MODEL="claude-fable-5"
+DEFAULT_CHEAP_MODEL="claude-opus-5"
 
 # pick_model <label> <default> — prints the chosen model id on stdout.
-# Input: 1-3 selects from MODEL_CHOICES, empty takes the default, anything
+# Input: 1-4 selects from MODEL_CHOICES, empty takes the default, anything
 # else is used verbatim as a model id.
 pick_model() {
   local label="$1" default="$2" raw
   echo "  $label model:" >&2
-  echo "    1) ${MODEL_CHOICES[0]}   2) ${MODEL_CHOICES[1]}   3) ${MODEL_CHOICES[2]}" >&2
+  echo "    1) ${MODEL_CHOICES[0]}   2) ${MODEL_CHOICES[1]}   3) ${MODEL_CHOICES[2]}   4) ${MODEL_CHOICES[3]}" >&2
   echo "    or type a model id" >&2
   read -p "  [default: $default] > " raw
   raw=$(echo "$raw" | tr -d '[:space:]')
   case "$raw" in
-    "")    echo "$default" ;;
-    1|2|3) echo "${MODEL_CHOICES[$((raw-1))]}" ;;
-    *)     echo "$raw" ;;
+    "")      echo "$default" ;;
+    1|2|3|4) echo "${MODEL_CHOICES[$((raw-1))]}" ;;
+    *)       echo "$raw" ;;
   esac
 }
 
@@ -96,7 +96,7 @@ echo ""
 # ── Effort ─────────────────────────────────────────────────────────────────────
 EFFORT_CHOICES=("xhigh" "high" "medium" "low")
 DEFAULT_HIGH_EFFORT="xhigh"
-DEFAULT_LOW_EFFORT="medium"
+DEFAULT_LOW_EFFORT="high"
 
 # pick_effort <label> <default> — prints the chosen effort on stdout.
 # Input: 1-4 selects from EFFORT_CHOICES, empty takes the default, anything
