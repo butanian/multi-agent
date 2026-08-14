@@ -16,8 +16,8 @@ A Slack-native capture flow: trigger on a thread, distill it into a context card
 ## What we are building (exact deliverables)
 
 **D1. Slack app `context is king`** (new repo `playon/cik-slack-capture`, Run-on-Slack Deno, same stack as slack-env-tracker):
-- Message shortcut **"Capture context"** in the message ⋯ menu. Opens a two-field modal, both fields optional: retrieval keywords ("What would someone search to find this later?") and a repo/system hint. Submit-empty works.
-- Slash command **`/cik <permalink> [repo] [keywords...]`** for capturing a thread by link, hints inline.
+- **Capture form** (link trigger): fields are thread permalink (required), retrieval keywords ("What would someone search to find this later?", optional), and a repo/system hint (optional). Reachable from Slack's workflow menu and pinnable as a channel bookmark. This is the command-style entry point.
+- **`:cik:` reaction trigger** for in-context capture: an event trigger on `reaction_added`, filtered at the trigger to the custom `:cik:` emoji, captures the reacted message's thread with zero typing. No hints on this path; the ack reply links the form for a re-run with hints. Platform note (verified against docs.slack.dev 2026-08-14): Run-on-Slack supports only link, event, scheduled, and webhook triggers; message shortcuts and slash commands are classic-app features requiring a hosted Request URL, which our architecture decision rejected.
 - A capture function that resolves the thread root, fetches the full thread via `conversations.replies`, builds the dispatch payload, fires `repository_dispatch` (event type `slack-capture`) at `playon/playon-context`, and replies in the thread: capture started, PR link will follow.
 - Ephemeral error replies for bad permalinks and channels the bot is not in.
 - Unit tests (permalink parsing, payload shaping, truncation) and a README documenting the trigger re-create gotcha.
@@ -28,7 +28,7 @@ A Slack-native capture flow: trigger on a thread, distill it into a context card
 - `tools/slack-capture/` holding: the distiller prompt, a distill runner that calls the Claude API (`claude-sonnet-5`) and returns validated JSON, the promote-and-lint glue (real `cik-add`, card promoted into `domains/<repo>/`, root `routes_to` patched, `cik-lint`), the PR builder, and the Slack reply step.
 - Golden-transcript tests for the distiller. Fixture #1 is the 2026-08-13 payout-timing thread, asserting: type gotcha, home statement-generation, keywords honored, no invented facts.
 
-**D3. Platform setup** (manual, documented in the READMEs): app created and deployed, both triggers created, secrets set. Slack app env holds one fine-grained GitHub PAT (playon-context, `contents: write` only). playon-context Actions secrets hold `ANTHROPIC_API_KEY` and `SLACK_BOT_TOKEN`. The PR step uses the workflow's built-in `GITHUB_TOKEN`.
+**D3. Platform setup** (manual, documented in the READMEs): app created and deployed, both triggers created, the custom `:cik:` emoji uploaded to the workspace, secrets set. Slack app env holds one fine-grained GitHub PAT (playon-context, `contents: write` only, for the dispatch call). playon-context Actions secrets hold `ANTHROPIC_API_KEY`, `SLACK_BOT_TOKEN`, and a read token for checking out context-is-king. The PR step uses the workflow's built-in `GITHUB_TOKEN`.
 
 **D4. E2E validation**: dry-run demo in a test channel, then one real capture end to end, before announcing to xFin.
 
@@ -37,18 +37,18 @@ A Slack-native capture flow: trigger on a thread, distill it into a context card
 | # | Decision | Choice | Why |
 |---|----------|--------|-----|
 | 1 | Audience | xFin team first, workspace install | Tune quality and PR volume with a friendly audience, then widen. Fits the PDLC rollout narrative. |
-| 2 | Trigger UX | Message shortcut + `/cik <permalink>` | Slash commands do not receive `thread_ts`, so a bare `/cik` in a thread cannot see the thread. The shortcut covers in-context capture, the slash covers capture-by-link. |
+| 2 | Trigger UX | Capture form (link trigger) + `:cik:` reaction (event trigger) | Run-on-Slack supports only link, event, scheduled, and webhook triggers; message shortcuts and slash commands need a classic app with hosted HTTP (verified 2026-08-14). The form covers capture-by-link with hints; the filtered `reaction_added` trigger delivers `channel_id` + `message_ts`, restoring zero-typing in-context capture. |
 | 3 | Architecture | Thin Slack app + GitHub Action worker in playon-context | Reuses the real CIK toolchain (retrieval, placement, lint) with zero reimplementation drift. Secrets live in GitHub Actions. Slack app stays within Run-on-Slack limits. |
 | 4 | Capture hints | Optional keywords + repo hint at trigger time | Threads talk in symptoms ("payments delayed"); retrieval needs the searchable phrasing ("statement generation schedule"). The capturer knows the vocabulary; Slack-sourced cards are anchorless so text is the whole retrieval surface. |
 | 5 | Dedupe policy v1 | New card only, never auto-edit existing cards | Automated enrichment of verified cards from unverified chat is how good cards rot. PR body lists related cards and flags likely duplicates for the human reviewer. |
-| 6 | Review surface | Auto-PR, no card-draft modal in Slack | The PR is the product and GitHub review is the existing editing gate. A draft modal duplicates it on the platform least suited to interactivity. The hint modal (2 optional fields, single-shot) is the only modal. |
+| 6 | Review surface | Auto-PR, no card-draft surface in Slack | The PR is the product and GitHub review is the existing editing gate. A draft-editing surface duplicates it on the platform least suited to interactivity. The single-shot capture form is the only interactive surface. |
 | 7 | Anchors and status | Anchorless by default, `status: fresh` on merge, pinning is a human act | No `anchor_blobs` means the freshness engine correctly ignores unverifiable cards. PR approval is the verification step and the PR template says so. Distiller may propose anchors when the thread names files, landed unpinned with a verify-before-pinning note. |
 
 ## Architecture and flow
 
 ```
 Slack thread
-  |  message shortcut (modal: keywords?, repo?)  OR  /cik <permalink> [repo] [keywords...]
+  |  :cik: reaction on a thread message  OR  capture form (permalink, keywords?, repo?)
   v
 Run-on-Slack app (Deno, thin)
   |  resolve thread root, conversations.replies
@@ -69,10 +69,10 @@ Slack reply in thread: PR link (or failure notice with run link, or "nothing dur
 
 - **Payload** (client_payload, 9 top-level keys, within GitHub's 10-key limit on repository_dispatch):
   `channel`, `thread_ts`, `permalink`, `capturing_user` (display name + id), `repo_hint` (nullable), `keywords` (nullable), `truncated` (bool), `dry_run` (bool), `transcript` (array of `{user, ts, text}`).
-- **Dry run plumbing**: repository_dispatch has no native inputs, so `dry_run` rides the payload. The slash command accepts a `--dry-run` flag (the modal stays two fields; dry run is a builder affordance, not a capturer decision). The workflow also exposes a manual `workflow_dispatch` entry point that takes a fixture transcript, for testing without Slack in the loop.
+- **Dry run plumbing**: repository_dispatch has no native inputs, so `dry_run` rides the payload. It is never exposed on the capturer-facing form; builders reach it via the manual `workflow_dispatch` entry point (fixture transcript, no Slack in the loop) or a local `slack run` dev instance of the app.
 - **Size budget**: the serialized payload must stay under 60KB. If the thread exceeds it, drop oldest replies first (always keep the thread parent), set `truncated: true`, and note the count dropped. The distiller states truncation in the PR body.
 - **Permalink parsing**: accepts both message and thread permalinks; a reply permalink resolves to its thread root via the `thread_ts` query param or a `conversations.replies` probe.
-- **Platform gotchas honored**: single-shot modal only, no durable inline interactivity; after any trigger input change, delete and re-create the trigger (`slack deploy` does not update trigger inputs); README states both.
+- **Platform gotchas honored**: single-shot form only, no durable inline interactivity; after any trigger input change, delete and re-create the trigger (`slack deploy` does not update trigger inputs), which applies to both the link trigger and the reaction event trigger; README states both. The reaction event trigger fires only in channels the app is a member of and is filtered at the trigger to the `:cik:` emoji, so cost stays contained.
 
 ## Component detail: worker
 
@@ -87,7 +87,7 @@ Slack reply in thread: PR link (or failure notice with run link, or "nothing dur
 
 | Failure | Behavior |
 |---|---|
-| Bad permalink / unparseable args | Ephemeral reply with usage line |
+| Bad permalink / unparseable args | Form validation error, nothing dispatched |
 | Bot not in channel | Ephemeral reply: invite @context-is-king, then retry |
 | `conversations.replies` fails | In-thread reply with the error, no dispatch |
 | `repository_dispatch` non-2xx | In-thread reply: capture failed to hand off, try again |
@@ -106,7 +106,7 @@ Slack reply in thread: PR link (or failure notice with run link, or "nothing dur
 
 - No card-draft or editing modal in Slack.
 - No automated enrichment of existing cards from Slack content.
-- No emoji-reaction trigger.
+- No message shortcut and no slash command: they do not exist on Run-on-Slack (classic-app features requiring a hosted Request URL). Revisit only if the app ever moves to Bolt.
 - No company-wide rollout, no per-user rate limiting until volume demands it. Note: v1 has no allowlist enforcement either; anyone in the workspace who finds the shortcut can technically use it. Scoping to xFin is social (where we announce it), not technical.
 - No `reference`-type cards until the schema/lint bug is fixed upstream.
 
