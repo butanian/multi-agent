@@ -36,7 +36,9 @@ Wave 1 tasks are independent of Wave 0 except the workflow's pinned context-is-k
 
 ### Task 0: Allow `reference` in the card type enum (context-is-king)
 
-The store already contains a merged `type: reference` card (domains/member-service, PayPal tax ceiling) that the schema rejects, so `cik-lint` exits 1 on main and reference cards silently fail to load, while `cik-add --type reference` is advertised. Fix the enum.
+The store already contains a merged `type: reference` card (domains/member-service, PayPal tax ceiling) that the schema rejects, so `cik-lint` exits 1 on main and reference cards silently fail to load, while `reference` is advertised in the plugin's cache protocol (`bin/hooks/cache-protocol.txt`; cik-add itself takes a generic `--type` and passes it straight to CardSchema.parse). Fix the enum.
+
+Follow-up Task 0b (dispatched 2026-08-14 after Agent 2's escalation, Agent 1 ruling): add `reference` to `DURABLE` in `src/capture/tier.ts` + a test proving a reference draft classifies pr-tier, in its own PR. Without it, a captured reference card would auto-commit instead of routing to PR, inverting tiered trust (D4).
 
 **Files:**
 - Modify: `src/card/schema.ts` (the `CARD_TYPES` array)
