@@ -167,6 +167,20 @@ T=$(LIST_TEXT=$'MODELS (modelAccessCache in /Users/x/.claude.json)\n  x claude-f
 refused "$T" && ok "a human report is refused" || bad "built a menu out of '$(pane_model "$T" 1)'"
 rm -rf "$T"
 
+# D74: omitting an unentitled default would silently shift option 1 to a different model.
+echo "--- a preset default the account is not entitled to refuses the launch ---"
+T=$(LIST_TEXT=$'claude-opus-5\nclaude-sonnet-5' run_launcher launch.sh 1 1)
+refused "$T" && ok "an unentitled DEFAULT_STRONG_MODEL is refused" \
+  || bad "it was offered or omitted instead: pane 1 launched '$(pane_model "$T" 1)'"
+/usr/bin/grep -q 'claude-fable-5-1 is not in' "$T/.err" && ok "the refusal names the offending default" \
+  || bad "the refusal does not say which default is unentitled"
+rm -rf "$T"
+T=$(LIST_TEXT=$'claude-opus-5\nclaude-fable-5-1' run_launcher launch.sh 1 1)
+[ "$(pane_model "$T" 1)" = claude-fable-5-1 ] \
+  && ok "control: a launch whose defaults are both entitled still runs" \
+  || bad "control: refused a launch whose defaults are both entitled"
+rm -rf "$T"
+
 echo "--- an empty default model refuses the launch instead of running claude --model '' ---"
 T=$(DEF_STRONG= run_launcher launch.sh 1 1)
 refused "$T" && ok "launch.sh refuses an empty default" \

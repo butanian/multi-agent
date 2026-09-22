@@ -77,6 +77,15 @@ build_model_menu() {
       "$(printf '%s\n' "$list" | /usr/bin/grep -m1 -vE '^[A-Za-z0-9._-]+(\[1m\])?$|^$')" >&2
     return 1
   fi
+  # Refused rather than omitted: dropping an unentitled default would silently shift
+  # option 1 onto a different model.
+  for m in "$DEFAULT_STRONG_MODEL" "$DEFAULT_CHEAP_MODEL"; do
+    if ! printf '%s\n' "$list" | /usr/bin/grep -qxF "$m"; then
+      printf 'LAUNCH REFUSED: %s\n  assertion: every preset default is entitled for this account\n  %s is not in --list-entitled\n  Fix: change the default, or type the id as free text if you believe the list is wrong.\n' \
+        "$SCRIPT_DIR/tools/launcher-common.sh" "$m" >&2
+      return 1
+    fi
+  done
   MODEL_MENU=("$DEFAULT_STRONG_MODEL")
   if [ "$DEFAULT_CHEAP_MODEL" != "$DEFAULT_STRONG_MODEL" ]; then
     MODEL_MENU+=("$DEFAULT_CHEAP_MODEL")
