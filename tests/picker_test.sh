@@ -3,9 +3,6 @@
 # a picker whose four hardcoded ids were never checked against the account, so it could
 # offer models the account cannot run and hide models it can.
 #
-# Section 1 asserts the tools/ contract this launcher depends on. It is RED until
-# harness/swarm-222-a lands, and that is the point: a launcher wired to a helper that
-# does not exist yet must be loud, not silently broken.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 REPO=$PWD
@@ -19,8 +16,6 @@ for v in DEFAULT_STRONG_MODEL DEFAULT_CHEAP_MODEL; do
   [ -n "$val" ] && ok "launcher-common.sh exports $v=$val" \
                 || bad "launcher-common.sh does not define $v, so both launchers resolve it to an empty model id"
 done
-# model-lookup.py ignores an unknown flag and prints its human report with rc=0, so
-# "exits 0" proves nothing. Every line must be a bare id or the flag is not implemented.
 is_bare_list() {
   local total notid
   total=$(printf '%s\n' "$1" | /usr/bin/grep -c .)
@@ -46,7 +41,6 @@ else
   ok "--list-entitled prints $(printf '%s\n' "$elist" | /usr/bin/grep -c .) bare ids and the first one validates"
 fi
 
-# ── Behavioural section: stubbed tools/, so the launcher logic is proven either way ──
 
 STUB_LIST=$'claude-opus-5\nclaude-haiku-4-5-20251001\nclaude-fable-5-1\nclaude-sonnet-5\nclaude-opus-5'
 # Defaults first, then the rest sorted and deduplicated:
@@ -159,8 +153,6 @@ refused "$T" && ok "refused, no panes created" || bad "launched despite an unrea
   || bad "the tool's stderr was swallowed"
 rm -rf "$T"
 
-# rc=0 with the wrong output shape is the same failure wearing a different hat, and it
-# is exactly what the tool does TODAY for an unrecognised flag.
 echo "--- a list that is not bare model ids is refused, not turned into menu entries ---"
 T=$(LIST_TEXT=$'MODELS (modelAccessCache in /Users/x/.claude.json)\n  x claude-fable-5\n    claude-opus-5' \
     run_launcher launch.sh 1 1)

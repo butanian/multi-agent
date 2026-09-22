@@ -135,7 +135,6 @@ SWARM_DIR="$SCRIPT_DIR/swarms/$TARGET_SWARM"
 [ -d "$SWARM_DIR" ] || die "No such swarm: $SWARM_DIR"
 [ -f "$SWARM_DIR/pane-config.sh" ] || die "Missing $SWARM_DIR/pane-config.sh (run launch.sh first)."
 
-# ── --hard only: load the replay parameters (mirrors launch.sh) ──────────────
 # Resolved here rather than beside the relaunch they feed, so an unreplayable
 # launch.env is refused before four agents are asked to checkpoint for it.
 if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ]; then
@@ -150,8 +149,6 @@ if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ]; then
   source "$SWARM_DIR/launch.env"
   [ "$SKIP_PERMS_FLAG" = 1 ] && SKIP_PERMS="y"
   PERMS_FLAG=""; [ "$SKIP_PERMS" = "y" ] && PERMS_FLAG="--dangerously-skip-permissions"
-  # Per-agent model/effort: MODEL_n/EFFORT_n from launch.env, else the plain
-  # MODEL/EFFORT an old-format launch.env sets.
   AGENT_MODELS=(); AGENT_EFFORTS=(); AGENT_ENGINES=()
   for a in 1 2 3 4; do
     mvar="MODEL_$a"; evar="EFFORT_$a"

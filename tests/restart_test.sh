@@ -129,7 +129,7 @@ if which == "no-refusal":
     if j < 0: sys.exit("control anchor moved: end of the missing-launch.env guard")
     s = s[:i] + s[j+6:]
 elif which == "late-refusal":
-    head = "# ── --hard only: load the replay parameters (mirrors launch.sh) ──────────────"
+    head = 'if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ]; then'
     i = s.find(head)
     if i < 0: sys.exit("control anchor moved: the replay-parameter block")
     j = s.find("\nfi\n", i)

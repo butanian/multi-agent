@@ -92,7 +92,6 @@ if [ -z "${DEFAULT_STRONG_MODEL:-}" ] || [ -z "${DEFAULT_CHEAP_MODEL:-}" ]; then
   exit 1
 fi
 
-# Orchestrator gets the best model at xhigh effort; workers get the 2nd model at high.
 ORCH_MODEL="$DEFAULT_STRONG_MODEL";  ORCH_EFFORT="xhigh"
 WORKER_MODEL="$DEFAULT_CHEAP_MODEL"; WORKER_EFFORT="high"
 

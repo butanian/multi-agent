@@ -98,8 +98,6 @@ build_model_menu() {
 }
 
 # pick_model <label> <default> — prints the chosen model id on stdout.
-# A number selects from MODEL_MENU, empty takes the default, anything else is used
-# verbatim and validated with the rest before any pane starts.
 pick_model() {
   local label="$1" default="$2" raw i
   echo "  $label model:" >&2

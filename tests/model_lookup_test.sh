@@ -202,7 +202,6 @@ check "unquoted trailing whitespace is still accepted" "clean" "$r"
 unset CLAUDE_JSON
 
 
-# --- S222-A: --list-entitled, the only source of ids for the launcher's menu ---
 
 export CLAUDE_JSON="$FIX/entitled.json"
 cat > "$CLAUDE_JSON" <<'J'
@@ -242,7 +241,6 @@ check "a missing cache says to run claude once to refresh" "told" "$r"
 unset CLAUDE_JSON
 
 
-# --- S222-A, Codex review: the cache is written by another program ---
 
 # Valid JSON, wrong shape. The gate must refuse, never traceback, and must never
 # certify a model while it is blind to the entitlement list.
@@ -289,7 +287,6 @@ check "--check does not traceback on an entitled row with no id" "clean" "$r"
 unset CLAUDE_JSON
 
 
-# --- S222-A, D74: a menu builder must be able to trust rc alone ---
 
 out=$($LOOKUP --no-such-flag 2>/dev/null); rc=$?
 check "an unknown flag exits non-zero" "2" "$rc"
@@ -304,7 +301,6 @@ case "$err" in *Traceback*) r="tracebacks instead of a usage error" ;; *"--check
 check "--check with no file says so rather than tracebacking" "usage" "$r"
 
 
-# --- S222-A: validate_models, the gate the launchers call ---
 
 source "$REPO_ROOT/tools/launcher-common.sh"
 export CLAUDE_JSON="$FIX/fake_claude.json"
