@@ -383,7 +383,13 @@ launch_line_for() {
     effort_flag="--effort $effort"
     effort_label=" · effort: $effort"
   fi
-  claude_cmd="claude --model '$model' $effort_flag $PERMS_FLAG --append-system-prompt '$THINK_PROMPT'"
+  # Pane 1's prompt comes from the SessionStart hook, which also survives /clear, so the
+  # launcher must not also hand it the workers' thoroughness prompt.
+  if [ "$a" = 1 ]; then
+    claude_cmd="claude --model '$model' $effort_flag $PERMS_FLAG $ORCH_TOOL_FLAGS"
+  else
+    claude_cmd="claude --model '$model' $effort_flag $PERMS_FLAG --append-system-prompt '$THINK_PROMPT'"
+  fi
   printf "cd '%s' && export SWARM_ID=%s && export AGENT_NUMBER=%s && echo '═══════════════════════════════════════' && echo '  AGENT %s%s  %s%s  (refreshed)' && echo '═══════════════════════════════════════' && %s" \
     "$SCRIPT_DIR" "$TARGET_SWARM" "$a" "$a" "$role" "$model" "$effort_label" "$claude_cmd"
 }

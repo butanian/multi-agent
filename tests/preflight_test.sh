@@ -32,8 +32,9 @@ echo "--- the gate must accept THIS REPO'S OWN settings.json (production form) -
 # Uses the real .claude/ verbatim, but in a sandbox root carrying the runtime state a
 # launcher would have created. swarms/ is gitignored, so pointing at $REPO directly
 # would pass here and fail on a fresh clone.
-rs=$(mktemp -d); mkdir -p "$rs/swarms/220"
+rs=$(mktemp -d); mkdir -p "$rs/swarms/220" "$rs/tools"
 cp -R "$REPO/.claude" "$rs/.claude"
+cp "$REPO/tools/pane1-settings.json" "$rs/tools/"
 printf 'demo' > "$rs/swarms/220/ACTIVE_PROJECT"
 errf=$(mktemp)
 if ( source tools/preflight-hook.sh; preflight_hook "$rs/.claude/settings.json" "$rs" 220 1 2 3 4 ) >/dev/null 2>"$errf"; then
@@ -114,6 +115,15 @@ if [ -s "$d" ]; then
   want=$(shasum -a 256 "$r/hooks/startup.sh" | cut -d' ' -f1)
   case "$(cat "$d")" in *"$want"*) ok "digest matches the hook that was verified" ;; *) bad "digest does not match the verified hook" ;; esac
 fi
+rm -rf "$r"
+
+echo "--- a malformed pane-1 deny file is refused for its own reason ---"
+r=$(mkfix good); printf '{ "permissions": { "deny": [ ,, ] }\n' > "$r/tools/pane1-settings.json"
+res=$(gate "$r")
+case "${res#*|}" in
+  *"valid JSON"*) ok "malformed deny file refused, citing the JSON assertion" ;;
+  *) bad "malformed deny file: wrong reason or accepted: ${res#*|}" ;;
+esac
 rm -rf "$r"
 
 echo "--- records the claude build for later correlation (record only, no assertion) ---"

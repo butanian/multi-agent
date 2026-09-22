@@ -70,6 +70,13 @@ preflight_hook() {
     return 1
   fi
 
+  local p1="$root/tools/pane1-settings.json" p1msg
+  p1msg=$("$checker" pane1-settings "$p1") || {
+    _pf_fail "$p1" "pane 1's settings file is valid JSON" "$p1msg" \
+      "fix the JSON in tools/pane1-settings.json; pane 1 is launched with --settings pointing at it"
+    return 1
+  }
+
   local agent src t0 t1 peers budget
   peers=$(printf '%s,' "$@"); peers=${peers%,}
 

@@ -97,7 +97,7 @@ THINK_FLAG="--append-system-prompt 'Think deeply and use extended reasoning. Exp
 # Orchestrator gets the best model at xhigh effort; workers get the 2nd model at high.
 ORCH_MODEL="claude-fable-5-1";  ORCH_EFFORT="xhigh"
 WORKER_MODEL="claude-opus-5"; WORKER_EFFORT="high"
-CMD_ORCH="claude --model '$ORCH_MODEL' --effort $ORCH_EFFORT $PERMS_FLAG $THINK_FLAG"
+CMD_ORCH="claude --model '$ORCH_MODEL' --effort $ORCH_EFFORT $PERMS_FLAG $ORCH_TOOL_FLAGS"
 CMD_WORKER="claude --model '$WORKER_MODEL' --effort $WORKER_EFFORT $PERMS_FLAG $THINK_FLAG"
 
 # ── Launch tabs ────────────────────────────────────────────────────────────────

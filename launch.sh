@@ -222,7 +222,7 @@ elif ! preflight_hook "$SCRIPT_DIR/.claude/settings.json" "$SCRIPT_DIR" "$SWARM_
   exit 1
 fi
 
-CMD1="claude --model '$MODEL_1' --effort $EFFORT_1 $PERMS_FLAG $THINK_FLAG"
+CMD1="claude --model '$MODEL_1' --effort $EFFORT_1 $PERMS_FLAG $ORCH_TOOL_FLAGS"
 CMD2="claude --model '$MODEL_2' --effort $EFFORT_2 $PERMS_FLAG $THINK_FLAG"
 CMD3="claude --model '$MODEL_3' --effort $EFFORT_3 $PERMS_FLAG $THINK_FLAG"
 CMD4="claude --model '$MODEL_4' --effort $EFFORT_4 $PERMS_FLAG $THINK_FLAG"

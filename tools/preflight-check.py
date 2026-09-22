@@ -42,6 +42,23 @@ def registration(path, root=""):
     return 0
 
 
+def pane1_settings(path):
+    """Pane 1 launches with --settings <path>. Claude Code silently ignores a settings
+    file that fails validation, which turns the whole deny list off and says nothing,
+    so an unparseable file must stop the launch rather than quietly weaken it."""
+    if not os.path.exists(path):
+        print("the file pane 1 is launched with does not exist")
+        return 1
+    try:
+        with open(path) as handle:
+            json.load(handle)
+    except Exception as exc:
+        print("does not parse as JSON (%s); Claude Code would ignore it silently and "
+              "every deny rule would be off" % exc)
+        return 1
+    return 0
+
+
 def contract(agent, project, peers=""):
     """Validate one hook invocation. Output arrives via env to avoid a pipeline."""
     raw = os.environ.get("PF_OUT", "")
@@ -87,6 +104,8 @@ def contract(agent, project, peers=""):
 if __name__ == "__main__":
     if sys.argv[1:2] == ["registration"]:
         sys.exit(registration(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else ""))
+    if sys.argv[1:2] == ["pane1-settings"]:
+        sys.exit(pane1_settings(sys.argv[2]))
     if sys.argv[1:2] == ["contract"]:
         sys.exit(contract(sys.argv[2],
                           sys.argv[3] if len(sys.argv) > 3 else "",

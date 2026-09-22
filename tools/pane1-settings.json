@@ -1,0 +1,21 @@
+{
+  "_comment": "Speed bump, not containment. This blocks reads of the listed source extensions, including via Bash. It does NOT stop pane 1 writing anywhere, and every extension not listed here stays readable. One extension per entry: brace alternation such as *.{py,ts} is silently ignored.",
+  "permissions": {
+    "deny": [
+      "Read(//**/*.py)",
+      "Read(//**/*.ts)",
+      "Read(//**/*.tsx)",
+      "Read(//**/*.js)",
+      "Read(//**/*.jsx)",
+      "Read(//**/*.sh)",
+      "Read(//**/*.bash)",
+      "Read(//**/*.java)",
+      "Read(//**/*.kt)",
+      "Read(//**/*.rb)",
+      "Read(//**/*.go)",
+      "Read(//**/*.rs)",
+      "Read(//**/*.sql)",
+      "Read(//**/*.tf)"
+    ]
+  }
+}

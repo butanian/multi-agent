@@ -3,6 +3,15 @@
 # workspace.sh so each value exists once. THINK_PROMPT is already duplicated across five
 # literals in this repo; do not add a sixth of anything here.
 
+LAUNCHER_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)"
+
+# Pane 1 only. Narrows the tool set and adds a path-scoped Read deny. The deny is a
+# speed bump, not containment: Bash stays available so writes are unrestricted, and any
+# extension not listed in the file stays readable. tools/pane1-settings.json states its
+# own limits, and the preflight refuses to launch if it does not parse, because a
+# malformed settings file silently disables every deny rule.
+ORCH_TOOL_FLAGS="--tools Read,Write,Edit,Bash,Skill --strict-mcp-config --settings $LAUNCHER_ROOT/tools/pane1-settings.json"
+
 # validate_models "<LABEL=value newline-separated>"
 # An unknown --effort does not fail the CLI, it warns and silently uses the default, and
 # an effort above a model's cap is silently downgraded. Both are invisible at runtime,

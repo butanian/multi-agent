@@ -4,8 +4,11 @@
 mkfix() { # $1=variant  -> echoes the sandbox root
   local v=$1 root hook
   root=$(mktemp -d)
-  mkdir -p "$root/swarms/220" "$root/hooks"
+  mkdir -p "$root/swarms/220" "$root/hooks" "$root/tools"
   printf 'demo' > "$root/swarms/220/ACTIVE_PROJECT"
+  # pane 1 launches with --settings this file, and the gate refuses without it, so every
+  # fixture needs a valid one or each failure would be attributed to the wrong cause.
+  cp "$REPO/tools/pane1-settings.json" "$root/tools/pane1-settings.json"
   hook="$root/hooks/startup.sh"
   case $v in
     good)      cp "$REPO/.claude/hooks/startup.sh" "$hook"
