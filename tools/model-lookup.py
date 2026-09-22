@@ -47,7 +47,10 @@ def efforts():
 def account_models():
     with open(CLAUDE_JSON) as fh:
         blob = json.load(fh)
-    return blob.get("modelAccessCache") or [], blob.get("orgModelDefaultCache") or {}
+    # The cache is written by the CLI, so a shape change there must refuse, not traceback.
+    rows = blob.get("modelAccessCache")
+    rows = [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+    return rows, blob.get("orgModelDefaultCache") or {}
 
 
 def list_entitled():

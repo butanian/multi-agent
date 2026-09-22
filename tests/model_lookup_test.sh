@@ -242,6 +242,27 @@ check "a missing cache says to run claude once to refresh" "told" "$r"
 unset CLAUDE_JSON
 
 
+# --- S222-A, Codex review: the cache is written by another program ---
+
+# Valid JSON, wrong shape. The gate must refuse, never traceback, and must never
+# certify a model while it is blind to the entitlement list.
+export CLAUDE_JSON="$FIX/junk_rows.json"
+printf '{"modelAccessCache":["not-a-row"]}\n' > "$CLAUDE_JSON"
+out=$($LOOKUP --list-entitled 2>/dev/null); rc=$?
+check "a wrong-shaped cache exits non-zero" "1" "$rc"
+check "a wrong-shaped cache prints nothing on stdout" "" "$out"
+err=$($LOOKUP --list-entitled 2>&1 >/dev/null)
+case "$err" in *Traceback*) r="tracebacks at the gate" ;; *"Run claude once"*) r=told ;; *) r="other: $err" ;; esac
+check "a wrong-shaped cache gives the same refusal, not a traceback" "told" "$r"
+
+out=$(printf 'MODEL_1=claude-opus-5\nEFFORT_1=high\n' | $LOOKUP --check - 2>&1); rc=$?
+check "--check refuses rather than certifying a model it cannot verify" "1" "$rc"
+case "$out" in *Traceback*) r="tracebacks at the gate" ;; *) r=clean ;; esac
+check "--check does not traceback on a wrong-shaped cache" "clean" "$r"
+
+unset CLAUDE_JSON
+
+
 # --- S222-A: validate_models, the gate the launchers call ---
 
 source "$REPO_ROOT/tools/launcher-common.sh"
