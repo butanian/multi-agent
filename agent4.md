@@ -14,7 +14,7 @@ Persona library: `/path/to/your/persona/library`
 ## Coordination
 
 Read `COORDINATION.md` for the full protocol. Summary:
-- Keep task status current in your work log using `[ ]` `[~]` `[x]` `[!]`
+- Keep task status current in your work log using `[ ]` `[~]` `[x]` `[!]` `[-]` (see COORDINATION.md; `[-]` is cancelled/never executed, and `[x]` on partly-failed work must state the coverage gap)
 - Signal Agent 1 via `./send-to-agent.sh 1 "..."` when done or blocked. Always update your log first
 - Do not communicate directly with other agents. All sequencing goes through Agent 1
 
