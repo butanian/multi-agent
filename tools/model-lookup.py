@@ -8,6 +8,7 @@ this does not rot when the model list changes.
   ./model-lookup.py --efforts-only  just the effort levels
   ./model-lookup.py --probe-aliases resolve each alias by really calling the CLI
   ./model-lookup.py --check FILE    flag MODEL_n/EFFORT_n in a launch.env
+  ./model-lookup.py --list-entitled bare entitled ids on stdout, for a launcher menu
 """
 import json
 import os
@@ -47,6 +48,29 @@ def account_models():
     with open(CLAUDE_JSON) as fh:
         blob = json.load(fh)
     return blob.get("modelAccessCache") or [], blob.get("orgModelDefaultCache") or {}
+
+
+def list_entitled():
+    """Bare entitled model ids, one per line, for a launcher to build its menu from.
+
+    stdout carries nothing but ids so the caller can read it without parsing, and a
+    cache it cannot use is a refusal rather than an empty menu.
+    """
+    try:
+        rows = account_models()[0]
+    except (OSError, ValueError) as err:
+        sys.stderr.write(
+            f"error: cannot read {CLAUDE_JSON}, the Claude CLI's own model cache: {err}\n"
+            "Run claude once to refresh it.\n")
+        return 1
+    ids = sorted(r["apiName"] for r in rows if r.get("entitled") and r.get("apiName"))
+    if not ids:
+        sys.stderr.write(
+            f"error: {CLAUDE_JSON}, the Claude CLI's own model cache, lists no entitled models.\n"
+            "Run claude once to refresh it.\n")
+        return 1
+    print("\n".join(ids))
+    return 0
 
 
 def probe(alias):
@@ -132,6 +156,8 @@ def main():
         return 0
     if args[:1] == ["--check"]:
         return check(args[1])
+    if args[:1] == ["--list-entitled"]:
+        return list_entitled()
 
     models, org = account_models()
     print(f"claude {subprocess.run([CLAUDE_BIN,'--version'],capture_output=True,text=True).stdout.strip()}")

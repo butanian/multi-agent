@@ -201,5 +201,91 @@ check "unquoted trailing whitespace is still accepted" "clean" "$r"
 
 unset CLAUDE_JSON
 
+
+# --- S222-A: --list-entitled, the only source of ids for the launcher's menu ---
+
+export CLAUDE_JSON="$FIX/entitled.json"
+cat > "$CLAUDE_JSON" <<'J'
+{"modelAccessCache":[{"apiName":"claude-opus-5","entitled":true},
+                     {"apiName":"claude-fable-5-1","entitled":true},
+                     {"apiName":"claude-retired-1","entitled":false}]}
+J
+out=$($LOOKUP --list-entitled 2>/dev/null); rc=$?
+check "--list-entitled prints bare entitled ids, sorted, nothing else" \
+  "claude-fable-5-1
+claude-opus-5" "$out"
+check "--list-entitled exits 0 when the cache has entitled ids" "0" "$rc"
+case "$out" in *claude-retired-1*) r="leaked an unentitled id" ;; *) r=excluded ;; esac
+check "--list-entitled excludes an unentitled id" "excluded" "$r"
+
+export CLAUDE_JSON="$FIX/none_entitled.json"
+printf '{"modelAccessCache":[{"apiName":"claude-retired-1","entitled":false}]}\n' > "$CLAUDE_JSON"
+out=$($LOOKUP --list-entitled 2>/dev/null); rc=$?
+check "a cache with zero entitled ids exits non-zero" "1" "$rc"
+check "a cache with zero entitled ids prints nothing on stdout" "" "$out"
+err=$($LOOKUP --list-entitled 2>&1 >/dev/null)
+case "$err" in *"Claude CLI"*) r=named ;; *) r="does not name the cache: $err" ;; esac
+check "zero entitled ids names the Claude CLI cache on stderr" "named" "$r"
+case "$err" in *"Run claude once"*) r=told ;; *) r="no refresh instruction: $err" ;; esac
+check "zero entitled ids says to run claude once to refresh" "told" "$r"
+
+export CLAUDE_JSON="$FIX/absent.json"
+out=$($LOOKUP --list-entitled 2>/dev/null); rc=$?
+check "a missing cache exits non-zero" "1" "$rc"
+check "a missing cache prints nothing on stdout" "" "$out"
+err=$($LOOKUP --list-entitled 2>&1 >/dev/null)
+case "$err" in *"Claude CLI"*) r=named ;; *) r="does not name the cache: $err" ;; esac
+check "a missing cache names the Claude CLI cache on stderr" "named" "$r"
+case "$err" in *"Run claude once"*) r=told ;; *) r="no refresh instruction: $err" ;; esac
+check "a missing cache says to run claude once to refresh" "told" "$r"
+
+unset CLAUDE_JSON
+
+
+# --- S222-A: validate_models, the gate the launchers call ---
+
+source "$REPO_ROOT/tools/launcher-common.sh"
+export CLAUDE_JSON="$FIX/fake_claude.json"
+ALL_CLAUDE="claude claude claude claude"
+
+validate_models "MODEL_1=claude-opus-5
+EFFORT_1=high" "$ALL_CLAUDE" >/dev/null 2>&1; rc=$?
+check "a populated Claude pane still passes (control)" "0" "$rc"
+
+out=$(validate_models "MODEL_1=
+EFFORT_1=high" "$ALL_CLAUDE" 2>&1); rc=$?
+check "an empty MODEL_n on a Claude pane is refused" "1" "$rc"
+case "$out" in *MODEL_1*) r=named ;; *) r="does not name the pane: $out" ;; esac
+check "the empty-value refusal names which value is empty" "named" "$r"
+
+out=$(validate_models "MODEL_1=claude-opus-5
+EFFORT_1=" "$ALL_CLAUDE" 2>&1); rc=$?
+check "an empty EFFORT_n on a Claude pane is refused" "1" "$rc"
+
+validate_models "MODEL_1=claude-opus-5
+EFFORT_1=   " "$ALL_CLAUDE" >/dev/null 2>&1; rc=$?
+check "a whitespace-only EFFORT_n is refused, not passed as a value" "1" "$rc"
+
+# Control: the refusal is scoped to kept Claude panes, not blanket. A codex pane's
+# values are the Codex contract's business, exactly as D66 left them.
+validate_models "MODEL_2=
+EFFORT_2=" "claude codex claude claude" >/dev/null 2>&1; rc=$?
+check "an empty value on a codex pane is not the Claude gate's business" "0" "$rc"
+
+out=$(export SWARM_SKIP_PREFLIGHT=1; validate_models "MODEL_1=claude-opus-9
+EFFORT_1=high" "$ALL_CLAUDE" 2>&1); rc=$?
+check "SWARM_SKIP_PREFLIGHT no longer skips model validation" "1" "$rc"
+case "$out" in *SWARM_SKIP_PREFLIGHT*) r="offers a skip that no longer works" ;; *) r=honest ;; esac
+check "the refusal does not offer SWARM_SKIP_PREFLIGHT as an override" "honest" "$r"
+
+out=$(export SWARM_SKIP_PREFLIGHT=1; validate_models "MODEL_1=
+EFFORT_1=high" "$ALL_CLAUDE" 2>&1); rc=$?
+check "SWARM_SKIP_PREFLIGHT no longer skips the empty-value refusal" "1" "$rc"
+
+check "launcher-common owns DEFAULT_STRONG_MODEL" "claude-fable-5-1" "$DEFAULT_STRONG_MODEL"
+check "launcher-common owns DEFAULT_CHEAP_MODEL" "claude-opus-5" "$DEFAULT_CHEAP_MODEL"
+
+unset CLAUDE_JSON
+
 echo "  $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
