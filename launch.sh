@@ -69,8 +69,8 @@ build_model_menu() {
     return 1
   fi
   rm -f "$err"
-  # rc 0 with the wrong shape is the same failure in disguise: model-lookup.py ignores an
-  # unrecognised flag and prints its human report, which would become the menu.
+  # rc 0 is not enough on its own. This output becomes the menu verbatim, so anything
+  # that is not a bare id would be offered to the user as a selectable model.
   if printf '%s\n' "$list" | /usr/bin/grep -qvE '^[A-Za-z0-9._-]+(\[1m\])?$|^$'; then
     printf 'LAUNCH REFUSED: %s --list-entitled\n  assertion: it prints bare model ids, one per line\n  first offending line: %s\n  Fix: the flag is unimplemented or the output format changed.\n' \
       "$SCRIPT_DIR/tools/model-lookup.py" \
