@@ -3,7 +3,11 @@
 
 AGENT=$1
 MESSAGE=$2
-LARGE_MSG_THRESHOLD=1000
+# Claude Code's TUI treats a long write as a PASTE and absorbs the trailing
+# newline as text instead of Enter, so the message sits unsubmitted. Measured
+# orphans at 813 chars inline. Spilling above 300 keeps every typed string
+# short; the pointer that replaces it is ~110 chars and delivers reliably.
+LARGE_MSG_THRESHOLD=300
 
 if [ -z "$AGENT" ] || [ -z "$MESSAGE" ]; then
   echo "Usage: $0 <agent_number> \"<message>\""
@@ -14,6 +18,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ -z "$SWARM_ID" ]; then
   echo "Error: SWARM_ID not set. Export SWARM_ID before calling this script."
+  exit 1
+fi
+
+# SWARM_ID is interpolated into a path that gets sourced below and, for large
+# payloads, into one that gets `find -delete`d. Neither may be steerable outside
+# swarms/, so require a plain positive integer.
+if ! [[ "$SWARM_ID" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Error: SWARM_ID must be a positive integer, got '$SWARM_ID'." >&2
   exit 1
 fi
 
@@ -37,10 +49,14 @@ fi
 
 # For large messages, write to a persistent file and send a reference instead
 if [ ${#MESSAGE} -gt $LARGE_MSG_THRESHOLD ]; then
-  # NOTE: macOS mktemp only substitutes TRAILING X's. A ".md" suffix after the
-  # X's makes it create a literal "agent_content_XXXXXX.md", which collides on
-  # parallel sends. Keep the X's trailing.
-  CONTENT_FILE=$(mktemp /tmp/agent_content_XXXXXX)
+  # Payloads live under the swarm that sent them, never in a namespace shared
+  # with other swarms. macOS mktemp only substitutes TRAILING X's.
+  SPILL_DIR="$SCRIPT_DIR/swarms/$SWARM_ID/outbox"
+  mkdir -p "$SPILL_DIR"
+  # Confined to this swarm's own outbox, so a peer swarm's payloads are
+  # unreachable. 7 days, because an orphan has been seen sitting unread for 16h.
+  find "$SPILL_DIR" -type f -mtime +7 -delete 2>/dev/null
+  CONTENT_FILE=$(mktemp "$SPILL_DIR/to-agent${AGENT}-XXXXXX")
   printf '%s' "$MESSAGE" > "$CONTENT_FILE"
   SEND_MSG="[Message too large for inline send — read your full instructions from: $CONTENT_FILE]"
   echo "Content saved to $CONTENT_FILE (${#MESSAGE} chars)"
