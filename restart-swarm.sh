@@ -160,8 +160,9 @@ if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ]; then
     gvar="ENGINE_$a"; AGENT_ENGINES[$a]="${!gvar:-claude}"
   done
 
-  # Completeness is checked here, not left to the model validator: that one is
-  # skippable and a missing value is not a bad value, it is an absent replay.
+  # Duplicates a check validate_models also makes, deliberately: that one runs after
+  # Phase 1, so leaving it to the shared validator costs four agents a checkpoint for
+  # a restart this script already knows it cannot perform.
   MISSING=""
   for a in 1 2 3 4; do
     [ -n "${AGENT_MODELS[$a]}" ]  || MISSING="$MISSING MODEL_$a"

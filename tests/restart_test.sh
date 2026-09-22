@@ -103,10 +103,12 @@ run_skipping_preflight() {
   OUT=$( cd "$t" && env -u SWARM_ID -u AGENT_NUMBER SWARM_SKIP_PREFLIGHT=1 \
            bash restart-swarm.sh "$SID" --dry-run "$@" 2>&1 ); RC=$?
 }
-# Did the hard-only validation step run? Three signals, because one is not enough:
-# validate_models refuses an empty id in bash before it ever execs model-lookup.py, so
-# the stub's marker alone reads "not called" for exactly the input soft mode produces.
-validated() { # $1 = sandbox, $2 = output
+# Two predicates, because no single signal works for both directions.
+# validate_models execs model-lookup.py only for non-empty ids, so the stub's marker is
+# proof it ran but its absence is not proof it did not: for the all-empty ids a soft
+# refresh produces, validate_models refuses in bash and never reaches the stub.
+validator_ran() { [ -f "$1/validator-calls" ]; }
+validation_attempted() { # $1 = sandbox, $2 = output
   [ -f "$1/validator-calls" ] && return 0
   case "$2" in *"model-validated"*|*"LAUNCH REFUSED: empty value for"*) return 0 ;; esac
   return 1
@@ -152,6 +154,13 @@ fi
 """
     if s.count(old) != 1: sys.exit("control anchor moved: the hard-only validation guard")
     s = s.replace(old, new, 1)
+elif which == "no-validation":
+    old = """  if ! validate_models "$_mv" "$_eng"; then
+    exit 1
+  fi
+"""
+    if s.count(old) != 1: sys.exit("control anchor moved: the validate_models call")
+    s = s.replace(old, "", 1)
 elif which == "trailing-status":
     old = """if [ -n "$CALLER_AGENT" ]; then
   log "  Your own pane (Agent $CALLER_AGENT) refreshes in ~${SELF_DELAY}s via the detached finisher."
@@ -212,8 +221,18 @@ t=$(mksandbox "$REPO/restart-swarm.sh" env); run "$t" --hard
 [ "$RC" -eq 0 ] && ok "hard with launch.env succeeds (rc=$RC)" || bad "hard with launch.env failed: $OUT"
 case "$OUT" in *"--model 'claude-opus-5'"*) ok "pane 1 relaunches on the recorded model" ;;
   *) bad "recorded model absent from the relaunch line: $OUT" ;; esac
-validated "$t" "$OUT" && ok "hard is model-validated" || bad "hard skipped model validation"
+validator_ran "$t" && ok "hard is model-validated" || bad "hard skipped model validation"
 rm -rf "$t"
+
+echo "--- control: with the validate_models call removed, the hard check goes red ---"
+REG=$(mktemp)
+if regress no-validation "$REG"; then
+  t=$(mksandbox "$REG" env); run "$t" --hard
+  validator_ran "$t" && bad "still reported as validated with no validate_models call, so that check proves nothing" \
+                        || ok "reports not validated (the hard check is keyed on the call, not on the gating report)"
+  rm -rf "$t"
+else bad "could not build the no-validation control"; fi
+rm -f "$REG"
 
 echo "--- --hard with launch.env but no MODEL_n invents nothing ---"
 t=$(mksandbox "$REPO/restart-swarm.sh" env-nomodels); run "$t" --hard
@@ -239,14 +258,14 @@ echo "--- soft needs no launch.env and is not model-validated ---"
 t=$(mksandbox "$REPO/restart-swarm.sh" noenv); run "$t"
 [ "$RC" -eq 0 ] && ok "soft without launch.env succeeds (rc=$RC)" || bad "soft without launch.env failed: $OUT"
 case "$OUT" in *"/clear"*) ok "soft still refreshes the panes" ;; *) bad "soft refreshed nothing: $OUT" ;; esac
-validated "$t" "$OUT" && bad "soft called the model validator on empty ids" || ok "soft did not call the model validator"
+validation_attempted "$t" "$OUT" && bad "soft called the model validator on empty ids" || ok "soft did not call the model validator"
 rm -rf "$t"
 
 echo "--- control: with the hard-only guard removed, soft goes red ---"
 REG=$(mktemp)
 if regress no-mode-guard "$REG"; then
   t=$(mksandbox "$REG" noenv); run "$t"
-  validated "$t" "$OUT" && ok "unguarded copy does validate in soft (the check can fail)" \
+  validation_attempted "$t" "$OUT" && ok "unguarded copy does validate in soft (the check can fail)" \
                || bad "unguarded copy still skipped the validator, so the check proves nothing"
   [ "$RC" -ne 0 ] && ok "and a strict validator then fails the soft refresh outright (rc=$RC)" \
                   || bad "unguarded copy validated but still exited 0, so the harm is unproven"
@@ -267,7 +286,7 @@ rm -f "$REG"
 echo "--- save-only needs no launch.env either ---"
 t=$(mksandbox "$REPO/restart-swarm.sh" noenv); run "$t" --save-only
 [ "$RC" -eq 0 ] && ok "save-only without launch.env succeeds (rc=$RC)" || bad "save-only failed: $OUT"
-validated "$t" "$OUT" && bad "save-only called the model validator" || ok "save-only did not call the model validator"
+validation_attempted "$t" "$OUT" && bad "save-only called the model validator" || ok "save-only did not call the model validator"
 rm -rf "$t"
 
 echo "--- --skip-perms still means something now that launch.env is mandatory ---"
