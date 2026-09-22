@@ -2,7 +2,6 @@
 # The model menu must come from the entitlement layer, not a literal. Swarm 220 shipped
 # a picker whose four hardcoded ids were never checked against the account, so it could
 # offer models the account cannot run and hide models it can.
-#
 set -uo pipefail
 cd "$(dirname "$0")/.."
 REPO=$PWD
