@@ -47,9 +47,15 @@ def efforts():
 def account_models():
     with open(CLAUDE_JSON) as fh:
         blob = json.load(fh)
-    # The cache is written by the CLI, so a shape change there must refuse, not traceback.
-    rows = blob.get("modelAccessCache")
-    rows = [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+    # The cache is written by the CLI, so a shape change there must not traceback the
+    # gate reading it, and must not be dropped silently either.
+    raw = blob.get("modelAccessCache") or []
+    if not isinstance(raw, list):
+        raw = [raw]
+    rows = [r for r in raw if isinstance(r, dict) and isinstance(r.get("apiName"), str)]
+    if len(rows) != len(raw):
+        sys.stderr.write(f"warning: {len(raw) - len(rows)} unusable row(s) ignored in "
+                         f"{CLAUDE_JSON}, the Claude CLI's own model cache\n")
     return rows, blob.get("orgModelDefaultCache") or {}
 
 
@@ -66,7 +72,7 @@ def list_entitled():
             f"error: cannot read {CLAUDE_JSON}, the Claude CLI's own model cache: {err}\n"
             "Run claude once to refresh it.\n")
         return 1
-    ids = sorted(r["apiName"] for r in rows if r.get("entitled") and r.get("apiName"))
+    ids = sorted({r["apiName"] for r in rows if r.get("entitled") and r.get("apiName")})
     if not ids:
         sys.stderr.write(
             f"error: {CLAUDE_JSON}, the Claude CLI's own model cache, lists no entitled models.\n"
@@ -152,15 +158,25 @@ def check(path):
     return 1 if bad else 0
 
 
+def usage(problem):
+    sys.stderr.write(f"error: {problem}\n{__doc__}")
+    return 2
+
+
 def main():
     args = sys.argv[1:]
     if args[:1] == ["--efforts-only"]:
         print(" ".join(efforts()))
         return 0
     if args[:1] == ["--check"]:
+        if len(args) < 2:
+            return usage("--check needs a FILE, or - to read stdin")
         return check(args[1])
     if args[:1] == ["--list-entitled"]:
         return list_entitled()
+    unknown = [a for a in args if a != "--probe-aliases"]
+    if unknown:
+        return usage(f"unknown option: {' '.join(unknown)}")
 
     models, org = account_models()
     print(f"claude {subprocess.run([CLAUDE_BIN,'--version'],capture_output=True,text=True).stdout.strip()}")

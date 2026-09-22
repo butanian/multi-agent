@@ -263,6 +263,47 @@ check "--check does not traceback on a wrong-shaped cache" "clean" "$r"
 unset CLAUDE_JSON
 
 
+# Partial corruption. A valid row beside an unusable one must still yield the valid
+# id, because refusing the whole cache would brick every launch the day the CLI
+# changes its shape. The discard must be visible, never silent.
+export CLAUDE_JSON="$FIX/mixed_rows.json"
+printf '{"modelAccessCache":[{"apiName":"claude-opus-5","entitled":true},"bad-row",{"apiName":7,"entitled":true}]}\n' > "$CLAUDE_JSON"
+out=$($LOOKUP --list-entitled 2>/dev/null); rc=$?
+check "a usable row beside unusable ones is still listed" "claude-opus-5" "$out"
+check "partial corruption does not fail the launch" "0" "$rc"
+err=$($LOOKUP --list-entitled 2>&1 >/dev/null)
+case "$err" in *Traceback*) r="tracebacks on a non-string id" ;; *"2 unusable row"*) r=announced ;; *) r="silent discard: $err" ;; esac
+check "the discarded rows are announced on stderr, with a count" "announced" "$r"
+
+export CLAUDE_JSON="$FIX/dupe_rows.json"
+printf '{"modelAccessCache":[{"apiName":"claude-opus-5","entitled":true},{"apiName":"claude-opus-5","entitled":true}]}\n' > "$CLAUDE_JSON"
+check "a duplicated id appears once in the menu" "claude-opus-5" "$($LOOKUP --list-entitled 2>/dev/null)"
+
+# An entitled row with no apiName at all indexed straight into a KeyError.
+export CLAUDE_JSON="$FIX/noname_rows.json"
+printf '{"modelAccessCache":[{"entitled":true}]}\n' > "$CLAUDE_JSON"
+out=$(printf 'MODEL_1=claude-opus-5\nEFFORT_1=high\n' | $LOOKUP --check - 2>&1)
+case "$out" in *Traceback*) r="tracebacks at the gate" ;; *) r=clean ;; esac
+check "--check does not traceback on an entitled row with no id" "clean" "$r"
+
+unset CLAUDE_JSON
+
+
+# --- S222-A, D74: a menu builder must be able to trust rc alone ---
+
+out=$($LOOKUP --no-such-flag 2>/dev/null); rc=$?
+check "an unknown flag exits non-zero" "2" "$rc"
+check "an unknown flag prints nothing on stdout" "" "$out"
+err=$($LOOKUP --no-such-flag 2>&1 >/dev/null)
+case "$err" in *"--list-entitled"*) r=usage ;; *) r="no usage on stderr: $err" ;; esac
+check "an unknown flag prints usage on stderr" "usage" "$r"
+
+err=$($LOOKUP --check 2>&1 >/dev/null); rc=$?
+check "--check with no file exits non-zero" "2" "$rc"
+case "$err" in *Traceback*) r="tracebacks instead of a usage error" ;; *"--check"*) r=usage ;; *) r="other: $err" ;; esac
+check "--check with no file says so rather than tracebacking" "usage" "$r"
+
+
 # --- S222-A: validate_models, the gate the launchers call ---
 
 source "$REPO_ROOT/tools/launcher-common.sh"
@@ -312,8 +353,8 @@ out=$(export SWARM_SKIP_PREFLIGHT=1; validate_models "MODEL_1=
 EFFORT_1=high" "$ALL_CLAUDE" 2>&1); rc=$?
 check "SWARM_SKIP_PREFLIGHT no longer skips the empty-value refusal" "1" "$rc"
 
-check "launcher-common owns DEFAULT_STRONG_MODEL" "claude-fable-5-1" "$DEFAULT_STRONG_MODEL"
-check "launcher-common owns DEFAULT_CHEAP_MODEL" "claude-opus-5" "$DEFAULT_CHEAP_MODEL"
+check "launcher-common defines DEFAULT_STRONG_MODEL for other lanes to source" "claude-fable-5-1" "$DEFAULT_STRONG_MODEL"
+check "launcher-common defines DEFAULT_CHEAP_MODEL for other lanes to source" "claude-opus-5" "$DEFAULT_CHEAP_MODEL"
 
 unset CLAUDE_JSON
 
