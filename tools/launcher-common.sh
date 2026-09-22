@@ -5,6 +5,9 @@
 
 LAUNCHER_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)"
 
+DEFAULT_STRONG_MODEL="claude-fable-5-1"
+DEFAULT_CHEAP_MODEL="claude-opus-5"
+
 # Pane 1 only. Narrows the tool set and adds a path-scoped Read deny. The deny is a
 # speed bump, not containment: Bash stays available so writes are unrestricted, and any
 # extension not listed in the file stays readable. tools/pane1-settings.json states its
@@ -64,7 +67,8 @@ report_engine_gating() {
 # validate_models "<LABEL=value newline-separated>"
 # An unknown --effort does not fail the CLI, it warns and silently uses the default, and
 # an effort above a model's cap is silently downgraded. Both are invisible at runtime,
-# which is why they are checked before any pane starts.
+# which is why they are checked before any pane starts. SWARM_SKIP_PREFLIGHT deliberately
+# does not reach here: it exists to get past a broken startup hook, not a bad model id.
 validate_models() {
   local pairs=$1 engines=${2:-}
   local here out
@@ -86,9 +90,18 @@ validate_models() {
     pairs=$filtered
   fi
   [ -n "$(printf '%s' "$pairs" | tr -d '[:space:]')" ] || return 0
-  if [ -n "${SWARM_SKIP_PREFLIGHT:-}" ]; then
-    echo "  WARNING: SWARM_SKIP_PREFLIGHT is set. Not validating models or efforts." >&2
-    return 0
+  local empties="" line
+  while IFS= read -r line; do
+    case "$line" in
+      MODEL_[0-9]*=*|EFFORT_[0-9]*=*)
+        [ -n "$(printf '%s' "${line#*=}" | tr -d '[:space:]')" ] || empties="$empties ${line%%=*}"
+        ;;
+    esac
+  done <<< "$pairs"
+  if [ -n "$empties" ]; then
+    printf 'LAUNCH REFUSED: empty value for%s\n  assertion: every Claude pane has both a model and an effort\n  an empty model id reaches the CLI as an empty --model argument, and an empty effort silently takes the CLI default\n  Fix: set a value for each, or set ENGINE_n=codex for a pane that is not Claude\n' \
+      "$empties" >&2
+    return 1
   fi
   if [ ! -x "$here/model-lookup.py" ]; then
     printf 'LAUNCH REFUSED: %s\n  assertion: the model validator is present\n  the launcher cannot verify models, so it must not guess\n  Fix: restore tools/model-lookup.py\n' \
@@ -97,7 +110,7 @@ validate_models() {
   fi
   out=$(printf '%s\n' "$pairs" | "$here/model-lookup.py" --check -)
   if [ $? -ne 0 ]; then
-    printf 'LAUNCH REFUSED: %s\n  assertion: every model id and effort is valid for this account\n%s\n  Fix: correct the flagged value, or set SWARM_SKIP_PREFLIGHT=1 to override deliberately\n' \
+    printf 'LAUNCH REFUSED: %s\n  assertion: every model id and effort is valid for this account\n%s\n  Fix: correct the flagged value\n' \
       "$here/model-lookup.py" "$out" >&2
     return 1
   fi

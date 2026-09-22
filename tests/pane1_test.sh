@@ -110,17 +110,15 @@ printf 'MODEL_1=claude-opus-5\nEFFORT_1=ludicrous\n' | python3 tools/model-looku
 
 echo "--- the launchers' OWN shipped defaults must pass their own validator ---"
 mk() { printf 'MODEL_1=%s\nEFFORT_1=%s\n' "$1" "$2"; }
-ds=$(/usr/bin/grep -m1 'DEFAULT_STRONG_MODEL=' launch.sh | cut -d'"' -f2)
-dc=$(/usr/bin/grep -m1 'DEFAULT_CHEAP_MODEL=' launch.sh | cut -d'"' -f2)
+ds=$(bash -c 'source tools/launcher-common.sh; printf "%s" "${DEFAULT_STRONG_MODEL:-}"' 2>/dev/null)
+dc=$(bash -c 'source tools/launcher-common.sh; printf "%s" "${DEFAULT_CHEAP_MODEL:-}"' 2>/dev/null)
 for m in "$ds" "$dc"; do
-  if mk "$m" high | python3 tools/model-lookup.py --check - >/dev/null 2>&1; then ok "launch.sh default $m is valid"
-  else bad "launch.sh ships default $m, which its own validator refuses"; fi
+  if [ -z "$m" ]; then bad "a shipped default model id is empty, so this check would validate nothing"
+  elif mk "$m" high | python3 tools/model-lookup.py --check - >/dev/null 2>&1; then ok "shipped default $m is valid"
+  else bad "the launchers ship default $m, which their own validator refuses"; fi
 done
-while IFS= read -r m; do
-  [ -n "$m" ] || continue
-  if mk "$m" high | python3 tools/model-lookup.py --check - >/dev/null 2>&1; then ok "picker option $m is valid"
-  else bad "picker offers $m, which its own validator refuses"; fi
-done < <(/usr/bin/grep -m1 'MODEL_CHOICES=' launch.sh | tr '()"' '\n\n\n' | /usr/bin/grep '^claude-')
+# The four picker options this used to check are gone: the menu is built from
+# --list-entitled, so every option is entitled by construction. See picker_test.sh.
 
 echo "--- pane 1's output rules reach the hook's injected prompt ---"
 run1() { AGENT_NUMBER="$1" SWARM_ID=220 .claude/hooks/startup.sh <<< '{"session_id":"t","source":"startup","cwd":"'"$REPO"'"}' \

@@ -201,5 +201,162 @@ check "unquoted trailing whitespace is still accepted" "clean" "$r"
 
 unset CLAUDE_JSON
 
+
+# --- S222-A: --list-entitled, the only source of ids for the launcher's menu ---
+
+export CLAUDE_JSON="$FIX/entitled.json"
+cat > "$CLAUDE_JSON" <<'J'
+{"modelAccessCache":[{"apiName":"claude-opus-5","entitled":true},
+                     {"apiName":"claude-fable-5-1","entitled":true},
+                     {"apiName":"claude-retired-1","entitled":false}]}
+J
+out=$($LOOKUP --list-entitled 2>/dev/null); rc=$?
+check "--list-entitled prints bare entitled ids, sorted, nothing else" \
+  "claude-fable-5-1
+claude-opus-5" "$out"
+check "--list-entitled exits 0 when the cache has entitled ids" "0" "$rc"
+case "$out" in *claude-retired-1*) r="leaked an unentitled id" ;; *) r=excluded ;; esac
+check "--list-entitled excludes an unentitled id" "excluded" "$r"
+
+export CLAUDE_JSON="$FIX/none_entitled.json"
+printf '{"modelAccessCache":[{"apiName":"claude-retired-1","entitled":false}]}\n' > "$CLAUDE_JSON"
+out=$($LOOKUP --list-entitled 2>/dev/null); rc=$?
+check "a cache with zero entitled ids exits non-zero" "1" "$rc"
+check "a cache with zero entitled ids prints nothing on stdout" "" "$out"
+err=$($LOOKUP --list-entitled 2>&1 >/dev/null)
+case "$err" in *"Claude CLI"*) r=named ;; *) r="does not name the cache: $err" ;; esac
+check "zero entitled ids names the Claude CLI cache on stderr" "named" "$r"
+case "$err" in *"Run claude once"*) r=told ;; *) r="no refresh instruction: $err" ;; esac
+check "zero entitled ids says to run claude once to refresh" "told" "$r"
+
+export CLAUDE_JSON="$FIX/absent.json"
+out=$($LOOKUP --list-entitled 2>/dev/null); rc=$?
+check "a missing cache exits non-zero" "1" "$rc"
+check "a missing cache prints nothing on stdout" "" "$out"
+err=$($LOOKUP --list-entitled 2>&1 >/dev/null)
+case "$err" in *"Claude CLI"*) r=named ;; *) r="does not name the cache: $err" ;; esac
+check "a missing cache names the Claude CLI cache on stderr" "named" "$r"
+case "$err" in *"Run claude once"*) r=told ;; *) r="no refresh instruction: $err" ;; esac
+check "a missing cache says to run claude once to refresh" "told" "$r"
+
+unset CLAUDE_JSON
+
+
+# --- S222-A, Codex review: the cache is written by another program ---
+
+# Valid JSON, wrong shape. The gate must refuse, never traceback, and must never
+# certify a model while it is blind to the entitlement list.
+export CLAUDE_JSON="$FIX/junk_rows.json"
+printf '{"modelAccessCache":["not-a-row"]}\n' > "$CLAUDE_JSON"
+out=$($LOOKUP --list-entitled 2>/dev/null); rc=$?
+check "a wrong-shaped cache exits non-zero" "1" "$rc"
+check "a wrong-shaped cache prints nothing on stdout" "" "$out"
+err=$($LOOKUP --list-entitled 2>&1 >/dev/null)
+case "$err" in *Traceback*) r="tracebacks at the gate" ;; *"Run claude once"*) r=told ;; *) r="other: $err" ;; esac
+check "a wrong-shaped cache gives the same refusal, not a traceback" "told" "$r"
+
+out=$(printf 'MODEL_1=claude-opus-5\nEFFORT_1=high\n' | $LOOKUP --check - 2>&1); rc=$?
+check "--check refuses rather than certifying a model it cannot verify" "1" "$rc"
+case "$out" in *Traceback*) r="tracebacks at the gate" ;; *) r=clean ;; esac
+check "--check does not traceback on a wrong-shaped cache" "clean" "$r"
+
+unset CLAUDE_JSON
+
+
+# Partial corruption. A valid row beside an unusable one must still yield the valid
+# id, because refusing the whole cache would brick every launch the day the CLI
+# changes its shape. The discard must be visible, never silent.
+export CLAUDE_JSON="$FIX/mixed_rows.json"
+printf '{"modelAccessCache":[{"apiName":"claude-opus-5","entitled":true},"bad-row",{"apiName":7,"entitled":true}]}\n' > "$CLAUDE_JSON"
+out=$($LOOKUP --list-entitled 2>/dev/null); rc=$?
+check "a usable row beside unusable ones is still listed" "claude-opus-5" "$out"
+check "partial corruption does not fail the launch" "0" "$rc"
+err=$($LOOKUP --list-entitled 2>&1 >/dev/null)
+case "$err" in *Traceback*) r="tracebacks on a non-string id" ;; *"2 unusable row"*) r=announced ;; *) r="silent discard: $err" ;; esac
+check "the discarded rows are announced on stderr, with a count" "announced" "$r"
+
+export CLAUDE_JSON="$FIX/dupe_rows.json"
+printf '{"modelAccessCache":[{"apiName":"claude-opus-5","entitled":true},{"apiName":"claude-opus-5","entitled":true}]}\n' > "$CLAUDE_JSON"
+check "a duplicated id appears once in the menu" "claude-opus-5" "$($LOOKUP --list-entitled 2>/dev/null)"
+
+# An entitled row with no apiName at all indexed straight into a KeyError.
+export CLAUDE_JSON="$FIX/noname_rows.json"
+printf '{"modelAccessCache":[{"entitled":true}]}\n' > "$CLAUDE_JSON"
+out=$(printf 'MODEL_1=claude-opus-5\nEFFORT_1=high\n' | $LOOKUP --check - 2>&1)
+case "$out" in *Traceback*) r="tracebacks at the gate" ;; *) r=clean ;; esac
+check "--check does not traceback on an entitled row with no id" "clean" "$r"
+
+unset CLAUDE_JSON
+
+
+# --- S222-A, D74: a menu builder must be able to trust rc alone ---
+
+out=$($LOOKUP --no-such-flag 2>/dev/null); rc=$?
+check "an unknown flag exits non-zero" "2" "$rc"
+check "an unknown flag prints nothing on stdout" "" "$out"
+err=$($LOOKUP --no-such-flag 2>&1 >/dev/null)
+case "$err" in *"--list-entitled"*) r=usage ;; *) r="no usage on stderr: $err" ;; esac
+check "an unknown flag prints usage on stderr" "usage" "$r"
+
+err=$($LOOKUP --check 2>&1 >/dev/null); rc=$?
+check "--check with no file exits non-zero" "2" "$rc"
+case "$err" in *Traceback*) r="tracebacks instead of a usage error" ;; *"--check"*) r=usage ;; *) r="other: $err" ;; esac
+check "--check with no file says so rather than tracebacking" "usage" "$r"
+
+
+# --- S222-A: validate_models, the gate the launchers call ---
+
+source "$REPO_ROOT/tools/launcher-common.sh"
+export CLAUDE_JSON="$FIX/fake_claude.json"
+ALL_CLAUDE="claude claude claude claude"
+
+validate_models "MODEL_1=claude-opus-5
+EFFORT_1=high" "$ALL_CLAUDE" >/dev/null 2>&1; rc=$?
+check "a populated Claude pane still passes (control)" "0" "$rc"
+
+out=$(validate_models "MODEL_1=
+EFFORT_1=high" "$ALL_CLAUDE" 2>&1); rc=$?
+check "an empty MODEL_n on a Claude pane is refused" "1" "$rc"
+case "$out" in *MODEL_1*) r=named ;; *) r="does not name the pane: $out" ;; esac
+check "the empty-value refusal names which value is empty" "named" "$r"
+
+out=$(validate_models "MODEL_1=claude-opus-5
+EFFORT_1=" "$ALL_CLAUDE" 2>&1); rc=$?
+check "an empty EFFORT_n on a Claude pane is refused" "1" "$rc"
+
+validate_models "MODEL_1=claude-opus-5
+EFFORT_1=   " "$ALL_CLAUDE" >/dev/null 2>&1; rc=$?
+check "a whitespace-only EFFORT_n is refused, not passed as a value" "1" "$rc"
+
+# Control: the refusal is scoped to kept Claude panes, not blanket. A codex pane's
+# values are the Codex contract's business, exactly as D66 left them.
+validate_models "MODEL_2=
+EFFORT_2=" "claude codex claude claude" >/dev/null 2>&1; rc=$?
+check "an empty value on a codex pane is not the Claude gate's business" "0" "$rc"
+
+# The discriminating case. With only a codex pane in the payload the filter empties
+# it and the function returns before the empty-value check ever runs, so that alone
+# proves nothing about scoping. A mixed swarm makes the check run and still pass.
+validate_models "MODEL_1=claude-opus-5
+EFFORT_1=high
+MODEL_2=
+EFFORT_2=" "claude codex claude claude" >/dev/null 2>&1; rc=$?
+check "an unset codex pane does not refuse a launch whose Claude panes are set" "0" "$rc"
+
+out=$(export SWARM_SKIP_PREFLIGHT=1; validate_models "MODEL_1=claude-opus-9
+EFFORT_1=high" "$ALL_CLAUDE" 2>&1); rc=$?
+check "SWARM_SKIP_PREFLIGHT no longer skips model validation" "1" "$rc"
+case "$out" in *SWARM_SKIP_PREFLIGHT*) r="offers a skip that no longer works" ;; *) r=honest ;; esac
+check "the refusal does not offer SWARM_SKIP_PREFLIGHT as an override" "honest" "$r"
+
+out=$(export SWARM_SKIP_PREFLIGHT=1; validate_models "MODEL_1=
+EFFORT_1=high" "$ALL_CLAUDE" 2>&1); rc=$?
+check "SWARM_SKIP_PREFLIGHT no longer skips the empty-value refusal" "1" "$rc"
+
+check "launcher-common defines DEFAULT_STRONG_MODEL for other lanes to source" "claude-fable-5-1" "$DEFAULT_STRONG_MODEL"
+check "launcher-common defines DEFAULT_CHEAP_MODEL for other lanes to source" "claude-opus-5" "$DEFAULT_CHEAP_MODEL"
+
+unset CLAUDE_JSON
+
 echo "  $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -85,6 +85,17 @@ PERMS_FLAG=""
 [[ "$SKIP_PERMS" == "y" ]] && PERMS_FLAG="--dangerously-skip-permissions"
 
 source "$SCRIPT_DIR/tools/launcher-common.sh"
+
+if [ -z "${DEFAULT_STRONG_MODEL:-}" ] || [ -z "${DEFAULT_CHEAP_MODEL:-}" ]; then
+  printf 'LAUNCH REFUSED: %s\n  assertion: DEFAULT_STRONG_MODEL and DEFAULT_CHEAP_MODEL are both set\n  one is empty, so panes would start as: claude --model %s\n' \
+    "$SCRIPT_DIR/tools/launcher-common.sh" "''" >&2
+  exit 1
+fi
+
+# Orchestrator gets the best model at xhigh effort; workers get the 2nd model at high.
+ORCH_MODEL="$DEFAULT_STRONG_MODEL";  ORCH_EFFORT="xhigh"
+WORKER_MODEL="$DEFAULT_CHEAP_MODEL"; WORKER_EFFORT="high"
+
 if ! validate_models "MODEL_1=$ORCH_MODEL
 EFFORT_1=$ORCH_EFFORT
 MODEL_2=$WORKER_MODEL
@@ -93,10 +104,6 @@ EFFORT_2=$WORKER_EFFORT"; then
 fi
 
 THINK_FLAG="--append-system-prompt 'Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'"
-
-# Orchestrator gets the best model at xhigh effort; workers get the 2nd model at high.
-ORCH_MODEL="claude-fable-5-1";  ORCH_EFFORT="xhigh"
-WORKER_MODEL="claude-opus-5"; WORKER_EFFORT="high"
 CMD_ORCH="claude --model '$ORCH_MODEL' --effort $ORCH_EFFORT $PERMS_FLAG $ORCH_TOOL_FLAGS"
 CMD_WORKER="claude --model '$WORKER_MODEL' --effort $WORKER_EFFORT $PERMS_FLAG $THINK_FLAG"
 
