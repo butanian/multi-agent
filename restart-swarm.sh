@@ -84,6 +84,34 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+# Panes we tried to reach and panes we failed to reach, as space-padded strings.
+# Plain strings, not arrays: this runs under `set -u` on bash 3.2, where
+# expanding an empty array is an error.
+TRIED_PANES=" "
+UNREACHED_PANES=" "
+
+record_send() {
+  local a="$1" ok="$2"
+  case "$TRIED_PANES" in *" $a "*) ;; *) TRIED_PANES="$TRIED_PANES$a " ;; esac
+  [ "$ok" = 0 ] && return 0
+  case "$UNREACHED_PANES" in *" $a "*) ;; *) UNREACHED_PANES="$UNREACHED_PANES$a " ;; esac
+}
+
+# A per-failure warning scrolls past in a long refresh, so every exit path also
+# states the totals. A half-failed refresh must not be skimmable.
+delivery_summary() {
+  local tried unreached
+  tried=$(echo $TRIED_PANES | wc -w | tr -d ' ')
+  unreached=$(echo $UNREACHED_PANES | wc -w | tr -d ' ')
+  if [ "$tried" = 0 ]; then
+    log "  Delivery: no sends attempted."
+  elif [ "$unreached" = 0 ]; then
+    log "  Delivery: all $tried of $tried panes reached."
+  else
+    warn "Delivery: $unreached of $tried panes NOT reached (agents: $(echo $UNREACHED_PANES)). Non-fatal, but those agents got nothing."
+  fi
+}
+
 log()  { printf '%s\n' "$*"; }
 step() { printf '\n── %s\n' "$*"; }
 warn() { printf '  ! %s\n' "$*" >&2; }
@@ -253,8 +281,13 @@ else
     if [ "$DRY_RUN" = 1 ]; then
       log "    [dry-run] would send checkpoint message to Agent $a"
     else
-      SWARM_ID="$TARGET_SWARM" "$SCRIPT_DIR/send-to-agent.sh" "$a" "$msg" >/dev/null
-      log "    checkpoint requested: Agent $a"
+      if SWARM_ID="$TARGET_SWARM" "$SCRIPT_DIR/send-to-agent.sh" "$a" "$msg" >/dev/null; then
+        record_send "$a" 0
+        log "    checkpoint requested: Agent $a"
+      else
+        record_send "$a" 1
+        warn "Agent $a unreachable; no checkpoint requested. Its unflushed state will be lost."
+      fi
     fi
   done
   [ -n "$CALLER_AGENT" ] && log "    Agent $CALLER_AGENT (you) — flush your own work log before this finishes."
@@ -307,6 +340,7 @@ fi
 
 if [ "$SAVE_ONLY" = 1 ]; then
   step "Done (save-only). Swarm left running, context untouched."
+  delivery_summary
   exit 0
 fi
 
@@ -482,8 +516,13 @@ else
   sleep "$KICK_WAIT"
   for a in 1 2 3 4; do
     [ "$a" = "$CALLER_AGENT" ] && continue
-    SWARM_ID="$TARGET_SWARM" "$SCRIPT_DIR/send-to-agent.sh" "$a" "Execute your startup protocol now." >/dev/null
-    log "    kicked Agent $a"
+    if SWARM_ID="$TARGET_SWARM" "$SCRIPT_DIR/send-to-agent.sh" "$a" "Execute your startup protocol now." >/dev/null; then
+      record_send "$a" 0
+      log "    kicked Agent $a"
+    else
+      record_send "$a" 1
+      warn "Agent $a unreachable; startup kick not delivered."
+    fi
   done
 fi
 
@@ -491,4 +530,5 @@ fi
 
 step "Done."
 log "  Swarm $TARGET_SWARM refreshed ($MODE). Snapshots kept under swarms/$TARGET_SWARM/checkpoints/."
+delivery_summary
 [ -n "$CALLER_AGENT" ] && log "  Your own pane (Agent $CALLER_AGENT) refreshes in ~${SELF_DELAY}s via the detached finisher."
