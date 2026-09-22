@@ -31,6 +31,20 @@ for f in launch.sh workspace.sh; do
   check "$f: exactly one ACTIVE_PROJECT write" "$(count "$f" '> "\$SWARM_DIR/ACTIVE_PROJECT"')" "1"
 done
 
+echo "--- every launcher runs the preflight before it creates panes ---"
+for f in launch.sh workspace.sh restart-swarm.sh; do
+  c=$(at "$f" 'preflight_hook')
+  src=$(at "$f" 'preflight-hook.sh')
+  if [ -z "$c" ] || [ -z "$src" ]; then bad "$f: does not source and call the preflight"; continue; fi
+  ok "$f: sources and calls the preflight"
+  case "$f" in
+    restart-swarm.sh) p=$(at "$f" 'Phase 3') ;;
+    *)                p=$(at "$f" 'export AGENT_NUMBER=1') ;;
+  esac
+  if [ -n "$p" ] && [ "$c" -lt "$p" ]; then ok "$f: preflight call ($c) precedes pane work ($p)"
+  else bad "$f: preflight call ($c) does not precede pane work ($p)"; fi
+done
+
 echo
 echo "  $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

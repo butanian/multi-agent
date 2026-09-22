@@ -403,6 +403,26 @@ refresh_peer() {
   fi
 }
 
+# Refuse to start panes whose startup protocol would not load. The hook fails open at
+# runtime, so this is the last point where a broken one can still stop a launch.
+source "$SCRIPT_DIR/tools/launcher-common.sh"
+source "$SCRIPT_DIR/tools/preflight-hook.sh"
+_mv=""
+for _a in 1 2 3 4; do
+  _mv="$_mv
+MODEL_$_a=${AGENT_MODELS[$_a]:-}
+EFFORT_$_a=${AGENT_EFFORTS[$_a]:-}"
+done
+if ! validate_models "$_mv"; then
+  exit 1
+fi
+if [ -n "${SWARM_SKIP_PREFLIGHT:-}" ]; then
+  echo "  WARNING: SWARM_SKIP_PREFLIGHT is set. Launching WITHOUT verifying the startup hook." >&2
+elif ! preflight_hook "$SCRIPT_DIR/.claude/settings.json" "$SCRIPT_DIR" "$TARGET_SWARM" 1 2 3 4; then
+  echo "  Refresh aborted. Set SWARM_SKIP_PREFLIGHT=1 to override deliberately." >&2
+  exit 1
+fi
+
 # ── Phase 3: Refresh panes ───────────────────────────────────────────────────
 step "Phase 3 — refresh ($MODE)"
 TMP_LINES="$(mktemp -d)"; trap 'rm -rf "$TMP_LINES"' EXIT

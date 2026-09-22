@@ -13,8 +13,25 @@ bad() { printf '  FAIL  %s\n' "$1"; FAIL=$((FAIL+1)); }
 run_probe() { # $1 = launcher file to exercise; echoes PRESENT:<value> | ABSENT | ERROR:*
   local launcher=$1 tmp
   tmp=$(mktemp -d)
+  : "${PF_ERR_OUT:=/dev/null}"
   cp "$launcher" "$tmp/launch.sh"
   mkdir -p "$tmp/bin" "$tmp/projects"
+  cp -R "$REPO/tools" "$tmp/tools"
+  mkdir -p "$tmp/.claude/hooks"
+  cp "$REPO/.claude/settings.json" "$tmp/.claude/settings.json"
+  cp "$REPO/.claude/hooks/startup.sh" "$REPO/.claude/hooks/startup.py" "$tmp/.claude/hooks/"
+  # settings.json registers an absolute path into the real repo; retarget it at the copy
+  python3 - "$tmp/.claude/settings.json" "$tmp" <<'PS'
+import json,sys
+p,root=sys.argv[1],sys.argv[2]
+d=json.load(open(p))
+for g in d.get("hooks",{}).get("SessionStart",[]):
+    for h in g.get("hooks",[]):
+        if h.get("type")=="command":
+            h["command"]=root+"/.claude/hooks/startup.sh"
+json.dump(d,open(p,"w"))
+PS
+  [ -n "${PF_BREAK:-}" ] && printf '#!/usr/bin/env bash\nexit 3\n' > "$tmp/.claude/hooks/startup.sh"
   cat > "$tmp/bin/osascript" <<'EOS'
 #!/usr/bin/env bash
 f=$(ls "$PROBE_ROOT"/swarms/*/ACTIVE_PROJECT 2>/dev/null | head -1)
@@ -25,9 +42,10 @@ EOS
   printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/bin/sleep"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/send-to-agent.sh"
   chmod +x "$tmp/bin/osascript" "$tmp/bin/sleep" "$tmp/send-to-agent.sh"
-  ( cd "$tmp" && PROBE_ROOT="$tmp" PATH="$tmp/bin:$PATH" \
-      bash launch.sh >/dev/null 2>&1 <<< $'n\n1\n\n\n1\n\n\nn\nprobeproj\n' ) || true
-  if [ -f "$tmp/.probe" ]; then cat "$tmp/.probe"; else echo "ERROR:stub-never-ran"; fi
+  ( cd "$tmp" && PROBE_ROOT="$tmp" PF_ERR_OUT="$PF_ERR_OUT" PATH="$tmp/bin:$PATH" \
+      bash launch.sh >/dev/null 2>"$PF_ERR_OUT" <<< $'n\n1\n\n\n1\n\n\nn\nprobeproj\n' )
+  local lrc=$?
+  if [ -f "$tmp/.probe" ]; then cat "$tmp/.probe"; else echo "NOPANES:rc=$lrc"; fi
   rm -rf "$tmp"
 }
 
@@ -56,12 +74,35 @@ case "$got" in
   *)                 bad "launch.sh: harness problem ($got)" ;;
 esac
 
+echo "--- the preflight gates pane creation (a broken hook must stop the launch) ---"
+gotb=$(PF_BREAK=1 run_probe "$REPO/launch.sh")
+case "$gotb" in
+  NOPANES:*) ok "broken hook: no panes were created ($gotb)" ;;
+  PRESENT:*|ABSENT) bad "broken hook: launcher created panes anyway ($gotb)" ;;
+  *)         bad "broken hook: unexpected ($gotb)" ;;
+esac
+
 echo "--- control: the same probe MUST detect the pre-fix ordering ---"
 REG=$(mktemp)
 if make_regressed "$REG"; then
-  gotr=$(run_probe "$REG")
-  if [ "$gotr" = "ABSENT" ]; then ok "regressed copy correctly reports ABSENT (probe can fail)"
-  else bad "regressed copy reported '$gotr', so this probe cannot detect the defect"; fi
+  ERRF=$(mktemp)
+  gotr=$(PF_ERR_OUT="$ERRF" run_probe "$REG")
+  errtxt=$(cat "$ERRF"); rm -f "$ERRF"
+  case "$gotr" in
+    PRESENT:*)
+      bad "regressed copy still had ACTIVE_PROJECT present, so this probe cannot detect the defect" ;;
+    ABSENT)
+      ok "regressed copy reaches pane creation with ACTIVE_PROJECT absent (probe can fail)" ;;
+    NOPANES:*)
+      # The preflight now refuses the regressed ordering before panes exist. That is a
+      # stronger outcome, but only if it refused for THIS reason and not another.
+      case "$errtxt" in
+        *"active project is resolved before panes start"*)
+          ok "regressed copy refused by the preflight, citing the active-project assertion" ;;
+        *) bad "regressed copy aborted, but not for the ordering reason: $errtxt" ;;
+      esac ;;
+    *) bad "regressed copy: unexpected result '$gotr'" ;;
+  esac
 else
   bad "could not build the regressed control"
 fi

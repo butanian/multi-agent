@@ -84,10 +84,18 @@ SKIP_PERMS=$(echo "${RAW_SKIP_PERMS:-n}" | tr '[:upper:]' '[:lower:]' | tr -d '[
 PERMS_FLAG=""
 [[ "$SKIP_PERMS" == "y" ]] && PERMS_FLAG="--dangerously-skip-permissions"
 
+source "$SCRIPT_DIR/tools/launcher-common.sh"
+if ! validate_models "MODEL_1=$ORCH_MODEL
+EFFORT_1=$ORCH_EFFORT
+MODEL_2=$WORKER_MODEL
+EFFORT_2=$WORKER_EFFORT"; then
+  exit 1
+fi
+
 THINK_FLAG="--append-system-prompt 'Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'"
 
 # Orchestrator gets the best model at xhigh effort; workers get the 2nd model at high.
-ORCH_MODEL="claude-fable-5";  ORCH_EFFORT="xhigh"
+ORCH_MODEL="claude-fable-5-1";  ORCH_EFFORT="xhigh"
 WORKER_MODEL="claude-opus-5"; WORKER_EFFORT="high"
 CMD_ORCH="claude --model '$ORCH_MODEL' --effort $ORCH_EFFORT $PERMS_FLAG $THINK_FLAG"
 CMD_WORKER="claude --model '$WORKER_MODEL' --effort $WORKER_EFFORT $PERMS_FLAG $THINK_FLAG"
@@ -103,6 +111,16 @@ for PROJECT_ID in "${SELECTED[@]}"; do
   SWARM_DIR="$SCRIPT_DIR/swarms/$SWARM_ID"
   mkdir -p "$SWARM_DIR"
   printf '%s' "$PROJECT_ID" > "$SWARM_DIR/ACTIVE_PROJECT"
+
+  # Refuse to start panes whose startup protocol would not load. The hook fails open at
+  # runtime, so this is the last point where a broken one can still stop a launch.
+  source "$SCRIPT_DIR/tools/preflight-hook.sh"
+  if [ -n "${SWARM_SKIP_PREFLIGHT:-}" ]; then
+    echo "  WARNING: SWARM_SKIP_PREFLIGHT is set. Launching WITHOUT verifying the startup hook." >&2
+  elif ! preflight_hook "$SCRIPT_DIR/.claude/settings.json" "$SCRIPT_DIR" "$SWARM_ID" 1 2 3 4; then
+    echo "  Launch aborted. Set SWARM_SKIP_PREFLIGHT=1 to override deliberately." >&2
+    exit 1
+  fi
 
   echo "  Opening tab: $PROJECT_ID (swarm $SWARM_ID)..."
 

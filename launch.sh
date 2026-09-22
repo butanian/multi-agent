@@ -46,8 +46,8 @@ PERMS_FLAG=""
 [[ "$SKIP_PERMS" == "y" ]] && PERMS_FLAG="--dangerously-skip-permissions"
 
 # ── Models ─────────────────────────────────────────────────────────────────────
-MODEL_CHOICES=("claude-fable-5" "claude-opus-5" "claude-sonnet-5" "claude-haiku-4-5")
-DEFAULT_STRONG_MODEL="claude-fable-5"
+MODEL_CHOICES=("claude-fable-5-1" "claude-opus-5" "claude-sonnet-5" "claude-haiku-4-5-20251001")
+DEFAULT_STRONG_MODEL="claude-fable-5-1"
 DEFAULT_CHEAP_MODEL="claude-opus-5"
 
 # pick_model <label> <default> — prints the chosen model id on stdout.
@@ -200,6 +200,27 @@ fi
 SWARM_DIR="$SCRIPT_DIR/swarms/$SWARM_ID"
 mkdir -p "$SWARM_DIR"
 printf '%s' "$ACTIVE_PROJECT_VALUE" > "$SWARM_DIR/ACTIVE_PROJECT"
+
+# Refuse to start panes whose startup protocol would not load. The hook fails open at
+# runtime, so this is the last point where a broken one can still stop a launch.
+source "$SCRIPT_DIR/tools/launcher-common.sh"
+source "$SCRIPT_DIR/tools/preflight-hook.sh"
+if ! validate_models "MODEL_1=$MODEL_1
+EFFORT_1=$EFFORT_1
+MODEL_2=$MODEL_2
+EFFORT_2=$EFFORT_2
+MODEL_3=$MODEL_3
+EFFORT_3=$EFFORT_3
+MODEL_4=$MODEL_4
+EFFORT_4=$EFFORT_4"; then
+  exit 1
+fi
+if [ -n "${SWARM_SKIP_PREFLIGHT:-}" ]; then
+  echo "  WARNING: SWARM_SKIP_PREFLIGHT is set. Launching WITHOUT verifying the startup hook." >&2
+elif ! preflight_hook "$SCRIPT_DIR/.claude/settings.json" "$SCRIPT_DIR" "$SWARM_ID" 1 2 3 4; then
+  echo "  Launch aborted. Set SWARM_SKIP_PREFLIGHT=1 to override deliberately." >&2
+  exit 1
+fi
 
 CMD1="claude --model '$MODEL_1' --effort $EFFORT_1 $PERMS_FLAG $THINK_FLAG"
 CMD2="claude --model '$MODEL_2' --effort $EFFORT_2 $PERMS_FLAG $THINK_FLAG"
