@@ -26,7 +26,7 @@ In `projects/{id}/index.md`, the work breakdown table must include a `Persona` c
 
 Agents load their persona by reading that file on startup.
 
-## Cross-Engine Review — Required for All Work
+## Cross-Engine Review: Required for All Work
 
 Every recorded decision must be reviewed by an agent running a **different engine family** than the one that produced it. Claude work is reviewed by Codex, Codex work is reviewed by Claude. The requirement is an independent second engine, not a particular vendor, so a Codex worker satisfies it by having a Claude pane review its work, never by invoking `/codex-collab` on itself.
 

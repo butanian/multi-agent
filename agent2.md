@@ -18,7 +18,7 @@ Read `COORDINATION.md` for the full protocol. Summary:
 - Signal Agent 1 via `./send-to-agent.sh 1 "..."` when done or blocked — always update your log first
 - Do not communicate directly with other agents — all sequencing goes through Agent 1
 
-## Cross-Engine Review — Required for All Work
+## Cross-Engine Review: Required for All Work
 
 Every recorded decision must be reviewed by an agent running a **different engine family** than the one that produced it. Claude work is reviewed by Codex, Codex work is reviewed by Claude. The requirement is an independent second engine, not a particular vendor, so a Codex worker satisfies it by having a Claude pane review its work, never by invoking `/codex-collab` on itself.
 
