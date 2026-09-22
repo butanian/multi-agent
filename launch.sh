@@ -205,6 +205,14 @@ printf '%s' "$ACTIVE_PROJECT_VALUE" > "$SWARM_DIR/ACTIVE_PROJECT"
 # runtime, so this is the last point where a broken one can still stop a launch.
 source "$SCRIPT_DIR/tools/launcher-common.sh"
 source "$SCRIPT_DIR/tools/preflight-hook.sh"
+ENGINES_ALL="${ENGINE_1:-claude} ${ENGINE_2:-claude} ${ENGINE_3:-claude} ${ENGINE_4:-claude}"
+CLAUDE_AGENTS=""
+_i=0
+for _e in $ENGINES_ALL; do
+  _i=$((_i+1))
+  case "$_e" in ""|claude) CLAUDE_AGENTS="$CLAUDE_AGENTS $_i" ;; esac
+done
+
 if ! validate_models "MODEL_1=$MODEL_1
 EFFORT_1=$EFFORT_1
 MODEL_2=$MODEL_2
@@ -212,20 +220,30 @@ EFFORT_2=$EFFORT_2
 MODEL_3=$MODEL_3
 EFFORT_3=$EFFORT_3
 MODEL_4=$MODEL_4
-EFFORT_4=$EFFORT_4"; then
+EFFORT_4=$EFFORT_4" "$ENGINES_ALL"; then
   exit 1
 fi
 if [ -n "${SWARM_SKIP_PREFLIGHT:-}" ]; then
   echo "  WARNING: SWARM_SKIP_PREFLIGHT is set. Launching WITHOUT verifying the startup hook." >&2
-elif ! preflight_hook "$SCRIPT_DIR/.claude/settings.json" "$SCRIPT_DIR" "$SWARM_ID" 1 2 3 4; then
+elif [ -z "$CLAUDE_AGENTS" ]; then
+  echo "  No claude panes in this swarm; skipping the SessionStart hook preflight." >&2
+elif ! preflight_hook "$SCRIPT_DIR/.claude/settings.json" "$SCRIPT_DIR" "$SWARM_ID" $CLAUDE_AGENTS; then
   echo "  Launch aborted. Set SWARM_SKIP_PREFLIGHT=1 to override deliberately." >&2
   exit 1
 fi
 
-CMD1="claude --model '$MODEL_1' --effort $EFFORT_1 $PERMS_FLAG $ORCH_TOOL_FLAGS"
-CMD2="claude --model '$MODEL_2' --effort $EFFORT_2 $PERMS_FLAG $THINK_FLAG"
-CMD3="claude --model '$MODEL_3' --effort $EFFORT_3 $PERMS_FLAG $THINK_FLAG"
-CMD4="claude --model '$MODEL_4' --effort $EFFORT_4 $PERMS_FLAG $THINK_FLAG"
+# Per-pane engine. Default claude, so a launch with nothing set behaves exactly as it
+# did before this existed. Setting ENGINE_n=codex builds a Codex pane; no pane is set
+# to codex by this repo.
+ENGINE_1="${ENGINE_1:-claude}"
+ENGINE_2="${ENGINE_2:-claude}"
+ENGINE_3="${ENGINE_3:-claude}"
+ENGINE_4="${ENGINE_4:-claude}"
+
+CMD1=$(engine_cmd 1 "$ENGINE_1" "$MODEL_1" "$EFFORT_1" "$PERMS_FLAG" "$ORCH_TOOL_FLAGS") || exit 1
+CMD2=$(engine_cmd 2 "$ENGINE_2" "$MODEL_2" "$EFFORT_2" "$PERMS_FLAG" "$THINK_FLAG") || exit 1
+CMD3=$(engine_cmd 3 "$ENGINE_3" "$MODEL_3" "$EFFORT_3" "$PERMS_FLAG" "$THINK_FLAG") || exit 1
+CMD4=$(engine_cmd 4 "$ENGINE_4" "$MODEL_4" "$EFFORT_4" "$PERMS_FLAG" "$THINK_FLAG") || exit 1
 
 echo "Launching agent workspace in iTerm2..."
 
@@ -303,6 +321,10 @@ EFFORT_1='$EFFORT_1'
 EFFORT_2='$EFFORT_2'
 EFFORT_3='$EFFORT_3'
 EFFORT_4='$EFFORT_4'
+ENGINE_1='$ENGINE_1'
+ENGINE_2='$ENGINE_2'
+ENGINE_3='$ENGINE_3'
+ENGINE_4='$ENGINE_4'
 SKIP_PERMS='$SKIP_PERMS'
 THINK_PROMPT='Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'
 EOF

@@ -360,7 +360,7 @@ if [ "$MODE" = "hard" ]; then
   PERMS_FLAG=""; [ "$SKIP_PERMS" = "y" ] && PERMS_FLAG="--dangerously-skip-permissions"
   # Per-agent model/effort: MODEL_n/EFFORT_n from launch.env, else the plain
   # MODEL/EFFORT an old-format launch.env sets, else the per-role defaults above.
-  AGENT_MODELS=(); AGENT_EFFORTS=()
+  AGENT_MODELS=(); AGENT_EFFORTS=(); AGENT_ENGINES=()
   for a in 1 2 3 4; do
     if [ "$a" = 1 ]; then
       dm="$DEFAULT_ORCH_MODEL"; de="$DEFAULT_ORCH_EFFORT"
@@ -370,26 +370,23 @@ if [ "$MODE" = "hard" ]; then
     mvar="MODEL_$a"; evar="EFFORT_$a"
     AGENT_MODELS[$a]="${!mvar:-${MODEL:-$dm}}"
     AGENT_EFFORTS[$a]="${!evar:-${EFFORT:-$de}}"
+    gvar="ENGINE_$a"; AGENT_ENGINES[$a]="${!gvar:-claude}"
   done
 fi
 
 # Full shell line that relaunches a given agent in its pane (--hard).
 launch_line_for() {
-  local a="$1" role="" model effort effort_flag="" effort_label="" claude_cmd
+  local a="$1" role="" model effort effort_label="" claude_cmd
   [ "$a" = 1 ] && role=" — ORCHESTRATOR"
   model="${AGENT_MODELS[$a]}"
   effort="${AGENT_EFFORTS[$a]}"
-  if [ -n "$effort" ]; then
-    effort_flag="--effort $effort"
-    effort_label=" · effort: $effort"
-  fi
+  [ -n "$effort" ] && effort_label=" · effort: $effort"
   # Pane 1's prompt comes from the SessionStart hook, which also survives /clear, so the
   # launcher must not also hand it the workers' thoroughness prompt.
-  if [ "$a" = 1 ]; then
-    claude_cmd="claude --model '$model' $effort_flag $PERMS_FLAG $ORCH_TOOL_FLAGS"
-  else
-    claude_cmd="claude --model '$model' $effort_flag $PERMS_FLAG --append-system-prompt '$THINK_PROMPT'"
-  fi
+  local extra
+  if [ "$a" = 1 ]; then extra="$ORCH_TOOL_FLAGS"
+  else extra="--append-system-prompt '$THINK_PROMPT'"; fi
+  claude_cmd=$(engine_cmd "$a" "${AGENT_ENGINES[$a]:-claude}" "$model" "$effort" "$PERMS_FLAG" "$extra") || return 1
   printf "cd '%s' && export SWARM_ID=%s && export AGENT_NUMBER=%s && echo '═══════════════════════════════════════' && echo '  AGENT %s%s  %s%s  (refreshed)' && echo '═══════════════════════════════════════' && %s" \
     "$SCRIPT_DIR" "$TARGET_SWARM" "$a" "$a" "$role" "$model" "$effort_label" "$claude_cmd"
 }
@@ -428,18 +425,22 @@ refresh_peer() {
 # runtime, so this is the last point where a broken one can still stop a launch.
 source "$SCRIPT_DIR/tools/launcher-common.sh"
 source "$SCRIPT_DIR/tools/preflight-hook.sh"
-_mv=""
+_mv=""; _eng=""; _claude_agents=""
 for _a in 1 2 3 4; do
   _mv="$_mv
 MODEL_$_a=${AGENT_MODELS[$_a]:-}
 EFFORT_$_a=${AGENT_EFFORTS[$_a]:-}"
+  _eng="$_eng ${AGENT_ENGINES[$_a]:-claude}"
+  case "${AGENT_ENGINES[$_a]:-claude}" in ""|claude) _claude_agents="$_claude_agents $_a" ;; esac
 done
-if ! validate_models "$_mv"; then
+if ! validate_models "$_mv" "$_eng"; then
   exit 1
 fi
 if [ -n "${SWARM_SKIP_PREFLIGHT:-}" ]; then
   echo "  WARNING: SWARM_SKIP_PREFLIGHT is set. Launching WITHOUT verifying the startup hook." >&2
-elif ! preflight_hook "$SCRIPT_DIR/.claude/settings.json" "$SCRIPT_DIR" "$TARGET_SWARM" 1 2 3 4; then
+elif [ -z "$_claude_agents" ]; then
+  echo "  No claude panes in this swarm; skipping the SessionStart hook preflight." >&2
+elif ! preflight_hook "$SCRIPT_DIR/.claude/settings.json" "$SCRIPT_DIR" "$TARGET_SWARM" $_claude_agents; then
   echo "  Refresh aborted. Set SWARM_SKIP_PREFLIGHT=1 to override deliberately." >&2
   exit 1
 fi
