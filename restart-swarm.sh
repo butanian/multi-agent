@@ -135,12 +135,43 @@ SWARM_DIR="$SCRIPT_DIR/swarms/$TARGET_SWARM"
 [ -d "$SWARM_DIR" ] || die "No such swarm: $SWARM_DIR"
 [ -f "$SWARM_DIR/pane-config.sh" ] || die "Missing $SWARM_DIR/pane-config.sh (run launch.sh first)."
 
-# Checked here rather than beside the relaunch it feeds, so four agents are not asked
-# to checkpoint for a restart that already cannot happen.
-if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ] && [ ! -f "$SWARM_DIR/launch.env" ]; then
-  printf 'LAUNCH REFUSED: %s\n  assertion: a hard restart replays the parameters the swarm was launched with\n  nothing recorded them, and the launcher must not invent a model\n  Fix: run ./launch.sh to start a swarm, or drop --hard to /clear this one\n' \
-    "$SWARM_DIR/launch.env" >&2
-  exit 1
+# ── --hard only: load the replay parameters (mirrors launch.sh) ──────────────
+# Resolved here rather than beside the relaunch they feed, so an unreplayable
+# launch.env is refused before four agents are asked to checkpoint for it.
+if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ]; then
+  if [ ! -f "$SWARM_DIR/launch.env" ]; then
+    printf 'LAUNCH REFUSED: %s\n  assertion: a hard restart replays the parameters the swarm was launched with\n  nothing recorded them, and the launcher must not invent a model\n  Fix: run ./launch.sh to start a swarm, or drop --hard to /clear this one\n' \
+      "$SWARM_DIR/launch.env" >&2
+    exit 1
+  fi
+  MODEL=""; EFFORT=""; THINK_PROMPT="$DEFAULT_THINK_PROMPT"
+  SKIP_PERMS="n"
+  # shellcheck disable=SC1090
+  source "$SWARM_DIR/launch.env"
+  [ "$SKIP_PERMS_FLAG" = 1 ] && SKIP_PERMS="y"
+  PERMS_FLAG=""; [ "$SKIP_PERMS" = "y" ] && PERMS_FLAG="--dangerously-skip-permissions"
+  # Per-agent model/effort: MODEL_n/EFFORT_n from launch.env, else the plain
+  # MODEL/EFFORT an old-format launch.env sets.
+  AGENT_MODELS=(); AGENT_EFFORTS=(); AGENT_ENGINES=()
+  for a in 1 2 3 4; do
+    mvar="MODEL_$a"; evar="EFFORT_$a"
+    AGENT_MODELS[$a]="${!mvar:-${MODEL:-}}"
+    AGENT_EFFORTS[$a]="${!evar:-${EFFORT:-}}"
+    gvar="ENGINE_$a"; AGENT_ENGINES[$a]="${!gvar:-claude}"
+  done
+
+  # Completeness is checked here, not left to the model validator: that one is
+  # skippable and a missing value is not a bad value, it is an absent replay.
+  MISSING=""
+  for a in 1 2 3 4; do
+    [ -n "${AGENT_MODELS[$a]}" ]  || MISSING="$MISSING MODEL_$a"
+    [ -n "${AGENT_EFFORTS[$a]}" ] || MISSING="$MISSING EFFORT_$a"
+  done
+  if [ -n "$MISSING" ]; then
+    printf 'LAUNCH REFUSED: %s\n  assertion: every pane has a recorded model and effort to replay\n  missing:%s\n  an empty value reaches the pane verbatim, starting it on no model at all\n  Fix: add the missing keys, or run ./launch.sh to start a swarm\n' \
+      "$SWARM_DIR/launch.env" "$MISSING" >&2
+    exit 1
+  fi
 fi
 
 # shellcheck disable=SC1090
@@ -348,38 +379,6 @@ if [ "$SAVE_ONLY" = 1 ]; then
   step "Done (save-only). Swarm left running, context untouched."
   delivery_summary
   exit 0
-fi
-
-# ── --hard only: build the relaunch commands (mirrors launch.sh) ─────────────
-if [ "$MODE" = "hard" ]; then
-  MODEL=""; EFFORT=""; THINK_PROMPT="$DEFAULT_THINK_PROMPT"
-  SKIP_PERMS="n"
-  # shellcheck disable=SC1090
-  source "$SWARM_DIR/launch.env"
-  [ "$SKIP_PERMS_FLAG" = 1 ] && SKIP_PERMS="y"
-  PERMS_FLAG=""; [ "$SKIP_PERMS" = "y" ] && PERMS_FLAG="--dangerously-skip-permissions"
-  # Per-agent model/effort: MODEL_n/EFFORT_n from launch.env, else the plain
-  # MODEL/EFFORT an old-format launch.env sets.
-  AGENT_MODELS=(); AGENT_EFFORTS=(); AGENT_ENGINES=()
-  for a in 1 2 3 4; do
-    mvar="MODEL_$a"; evar="EFFORT_$a"
-    AGENT_MODELS[$a]="${!mvar:-${MODEL:-}}"
-    AGENT_EFFORTS[$a]="${!evar:-${EFFORT:-}}"
-    gvar="ENGINE_$a"; AGENT_ENGINES[$a]="${!gvar:-claude}"
-  done
-
-  # Completeness is checked here, not left to the model validator: that one is
-  # skippable and a missing value is not a bad value, it is an absent replay.
-  MISSING=""
-  for a in 1 2 3 4; do
-    [ -n "${AGENT_MODELS[$a]}" ]  || MISSING="$MISSING MODEL_$a"
-    [ -n "${AGENT_EFFORTS[$a]}" ] || MISSING="$MISSING EFFORT_$a"
-  done
-  if [ -n "$MISSING" ]; then
-    printf 'LAUNCH REFUSED: %s\n  assertion: every pane has a recorded model and effort to replay\n  missing:%s\n  an empty value reaches the pane verbatim, starting it on no model at all\n  Fix: add the missing keys, or run ./launch.sh to start a swarm\n' \
-      "$SWARM_DIR/launch.env" "$MISSING" >&2
-    exit 1
-  fi
 fi
 
 # Full shell line that relaunches a given agent in its pane (--hard).

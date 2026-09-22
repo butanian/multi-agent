@@ -112,12 +112,24 @@ import sys
 src, which, dst = sys.argv[1], sys.argv[2], sys.argv[3]
 s = open(src).read()
 if which == "no-refusal":
-    head = 'if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ] && [ ! -f "$SWARM_DIR/launch.env" ]; then'
+    head = """  if [ ! -f "$SWARM_DIR/launch.env" ]; then
+    printf 'LAUNCH REFUSED"""
     i = s.find(head)
     if i < 0: sys.exit("control anchor moved: the missing-launch.env guard")
-    j = s.find("\nfi\n", i)
+    j = s.find("\n  fi\n", i)
     if j < 0: sys.exit("control anchor moved: end of the missing-launch.env guard")
+    s = s[:i] + s[j+6:]
+elif which == "late-refusal":
+    head = "# ── --hard only: load the replay parameters (mirrors launch.sh) ──────────────"
+    i = s.find(head)
+    if i < 0: sys.exit("control anchor moved: the replay-parameter block")
+    j = s.find("\nfi\n", i)
+    if j < 0: sys.exit("control anchor moved: end of the replay-parameter block")
+    block = s[i:j+4]
     s = s[:i] + s[j+4:]
+    anchor = "# Full shell line that relaunches a given agent in its pane (--hard).\n"
+    if s.count(anchor) != 1: sys.exit("control anchor moved: launch_line_for")
+    s = s.replace(anchor, block + "\n" + anchor, 1)
 elif which == "no-mode-guard":
     old = """if [ "$MODE" = "hard" ]; then
   report_engine_gating "$_eng"
@@ -171,10 +183,21 @@ if regress no-refusal "$REG"; then
   case "$OUT" in *"LAUNCH REFUSED"*"/swarms/$SID/launch.env"*)
       bad "neutered copy still printed the launch.env refusal, so the check proves nothing" ;;
     *)  ok "neutered copy does not print it (the check is keyed on the refusal, not on any failure)" ;; esac
-  case "$OUT" in *"Phase 1"*) ok "and it does reach the checkpoint phase (the earliness check can fail)" ;;
-    *) bad "neutered copy also skipped Phase 1, so the earliness check proves nothing" ;; esac
   rm -rf "$t"
 else bad "could not build the no-refusal control"; fi
+rm -f "$REG"
+
+echo "--- control: moved back below the checkpoint, the earliness checks go red ---"
+REG=$(mktemp)
+if regress late-refusal "$REG"; then
+  t=$(mksandbox "$REG" noenv); withproject "$t"; run "$t" --hard
+  case "$OUT" in *"Phase 1"*) ok "the late copy does reach the checkpoint phase" ;;
+    *) bad "the late copy skipped Phase 1 anyway, so the earliness checks prove nothing" ;; esac
+  case "$OUT" in *"LAUNCH REFUSED"*"/swarms/$SID/launch.env"*)
+      ok "and still refuses, so earliness and refusal are independent assertions" ;;
+    *) bad "the late copy did not refuse at all, so this control tests the wrong thing" ;; esac
+  rm -rf "$t"
+else bad "could not build the late-refusal control"; fi
 rm -f "$REG"
 
 echo "--- --hard with launch.env replays it (the refusal is not unconditional) ---"
@@ -193,7 +216,10 @@ case "$OUT" in *claude-fable*|*claude-opus*|*claude-sonnet*) bad "a model id was
 rm -rf "$t"
 
 echo "--- the empty-model refusal is local, not delegated to a skippable validator ---"
-t=$(mksandbox "$REPO/restart-swarm.sh" env-nomodels y permissive); run_skipping_preflight "$t" --hard
+t=$(mksandbox "$REPO/restart-swarm.sh" env-nomodels y permissive); withproject "$t"
+run_skipping_preflight "$t" --hard
+case "$OUT" in *"Phase 1"*) bad "an unreplayable launch.env still cost four agents a checkpoint" ;;
+  *) ok "an incomplete launch.env is refused before Phase 1 too" ;; esac
 [ "$RC" -ne 0 ] && ok "refused with a permissive validator and SWARM_SKIP_PREFLIGHT=1 (rc=$RC)" \
                 || bad "an empty model survived both, so the check is delegated"
 case "$OUT" in *"--model ''"*) bad "a pane was relaunched on an empty model" ;;
