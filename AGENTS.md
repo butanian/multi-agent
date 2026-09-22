@@ -42,8 +42,12 @@ exported, and it drives iTerm2 through AppleScript.
 severed inside it: the same command returns `3` unsandboxed and
 `Can't get application "iTerm2". (-1728)` under `codex sandbox`, with no seatbelt file
 denial, so widening writable roots or `--add-dir` does not help. Your pane is started
-with `-s danger-full-access -a never` for that reason. It is the same posture the Claude
-panes already run with, not a wider one.
+with `-s danger-full-access -a never` for that reason. That sandbox posture is the same
+one the Claude panes already run with, not a wider one.
+
+One difference, so you are not told something untrue: if you are Agent 1, you do **not**
+get the tool restriction a Claude pane 1 gets. That narrowed tool list and its read deny
+are applied only on the claude branch, so a Codex orchestrator runs unrestricted.
 
 ## 4. The review gate
 

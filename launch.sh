@@ -360,10 +360,15 @@ sleep 10
 
 echo "Sending startup kick to all agents..."
 export SWARM_ID
-./send-to-agent.sh 1 "Execute your startup protocol now."
-./send-to-agent.sh 2 "Execute your startup protocol now."
-./send-to-agent.sh 3 "Execute your startup protocol now."
-./send-to-agent.sh 4 "Execute your startup protocol now."
+# A codex pane already received its bootstrap as engine_cmd's positional prompt, so a
+# kick here would be a second, racing start.
+for _a in 1 2 3 4; do
+  _ev="ENGINE_$_a"
+  case "${!_ev:-claude}" in
+    ""|claude) ./send-to-agent.sh "$_a" "Execute your startup protocol now." ;;
+    *) echo "  pane $_a: ${!_ev}, bootstrapped at launch, no kick sent." ;;
+  esac
+done
 
 echo ""
 echo "✓ Startup kicks sent — agents are now executing their protocols."

@@ -94,6 +94,57 @@ for f in launch.sh restart-swarm.sh; do
   /usr/bin/grep -q 'report_engine_gating' "$f" && ok "$f reports engine gating" || bad "$f never reports engine gating"
 done
 
+echo "--- a codex pane must not get two startup commands ---"
+# engine_cmd already hands a Codex pane a positional bootstrap prompt, so the launcher's
+# blanket startup kick would be a second, racing instruction.
+k=$(/usr/bin/grep -c 'send-to-agent.sh [0-9] "Execute your startup protocol' launch.sh 2>/dev/null || true)
+[ "$k" = "0" ] && ok "launch.sh no longer kicks panes unconditionally" \
+  || bad "launch.sh still sends $k unconditional kicks, so a codex pane would get two starts"
+# Behavioural, not structural: run launch.sh with pane 2 on codex under a stubbed
+# osascript and a logging send-to-agent.sh, then check who actually got kicked.
+kicked=$(
+  t=$(mktemp -d)
+  cp launch.sh "$t/"; mkdir -p "$t/bin" "$t/projects" "$t/.claude/hooks"
+  cp -R tools "$t/tools"; cp .claude/settings.json "$t/.claude/"
+  cp .claude/hooks/startup.sh .claude/hooks/startup.py "$t/.claude/hooks/"
+  python3 - "$t/.claude/settings.json" "$t" <<'PS'
+import json,sys
+d=json.load(open(sys.argv[1]))
+for g in d.get("hooks",{}).get("SessionStart",[]):
+    for h in g.get("hooks",[]):
+        if h.get("type")=="command": h["command"]=sys.argv[2]+"/.claude/hooks/startup.sh"
+json.dump(d,open(sys.argv[1],"w"))
+PS
+  printf '#!/usr/bin/env bash\necho "A,B,C,D"\n' > "$t/bin/osascript"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$t/bin/sleep"
+  printf '#!/usr/bin/env bash\necho "$1" >> "$t/kicks"\nexit 0\n' > "$t/send-to-agent.sh"
+  sed -i '' "s|\$t/kicks|$t/kicks|" "$t/send-to-agent.sh" 2>/dev/null || true
+  chmod +x "$t/bin/osascript" "$t/bin/sleep" "$t/send-to-agent.sh"
+  ( cd "$t" && ENGINE_2=codex MODEL_2=gpt-5.6-sol EFFORT_2=xhigh PATH="$t/bin:$PATH" \
+      bash launch.sh >/dev/null 2>&1 <<< $'y\n1\n\n\n1\n\n\nn\nkicktest\n' ) || true
+  tr '\n' ' ' < "$t/kicks" 2>/dev/null
+  rm -rf "$t"
+)
+case " $kicked " in *" 2 "*) bad "the codex pane WAS kicked, so it gets two starts (kicked: $kicked)" ;;
+  *) ok "the codex pane was not kicked (kicked: ${kicked:-none})" ;; esac
+for n in 1 3 4; do
+  case " $kicked " in *" $n "*) ok "claude pane $n was still kicked" ;;
+    *) bad "claude pane $n was NOT kicked, the guard is too broad (kicked: $kicked)" ;; esac
+done
+
+echo "--- AGENTS.md must not overstate the posture it gives pane 1 ---"
+# The codex branch does not apply ORCH_TOOL_FLAGS, so a Codex pane 1 is NOT restricted
+# the way a Claude pane 1 is. Saying "same posture" without qualification is false.
+if /usr/bin/grep -q 'same posture' AGENTS.md; then
+  # scope to the paragraph, a file-wide grep matched an unrelated "does not apply"
+  para=$(awk '/same posture/{f=1} f{print} f&&/^$/{exit}' AGENTS.md)
+  /usr/bin/grep -qiE 'tool restriction|ORCH_TOOL_FLAGS|not restricted' <<< "$para" \
+    && ok "the posture claim is qualified in its own paragraph" \
+    || bad "AGENTS.md claims the same posture without noting pane 1 loses the tool restriction"
+else
+  ok "no unqualified same-posture claim"
+fi
+
 echo
 echo "  $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

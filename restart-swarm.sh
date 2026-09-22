@@ -562,6 +562,12 @@ else
   sleep "$KICK_WAIT"
   for a in 1 2 3 4; do
     [ "$a" = "$CALLER_AGENT" ] && continue
+    # A relaunched codex pane gets its bootstrap as engine_cmd's positional prompt, so
+    # kicking it here would be a second, racing start.
+    case "${AGENT_ENGINES[$a]:-claude}" in
+      ""|claude) ;;
+      *) log "    Agent $a: ${AGENT_ENGINES[$a]}, bootstrapped at relaunch, no kick sent."; continue ;;
+    esac
     if SWARM_ID="$TARGET_SWARM" "$SCRIPT_DIR/send-to-agent.sh" "$a" "Execute your startup protocol now." >/dev/null; then
       record_send "$a" 0
       log "    kicked Agent $a"
