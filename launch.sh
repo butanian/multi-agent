@@ -20,6 +20,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Sourced here rather than beside the preflight because the model picker below needs
+# DEFAULT_STRONG_MODEL and DEFAULT_CHEAP_MODEL.
+source "$SCRIPT_DIR/tools/launcher-common.sh"
+
 # ── Swarm number ───────────────────────────────────────────────────────────────
 # Find the next available swarm number by scanning swarms/ for existing dirs
 SWARM_ID=1
@@ -46,26 +50,53 @@ PERMS_FLAG=""
 [[ "$SKIP_PERMS" == "y" ]] && PERMS_FLAG="--dangerously-skip-permissions"
 
 # ── Models ─────────────────────────────────────────────────────────────────────
-MODEL_CHOICES=("claude-fable-5-1" "claude-opus-5" "claude-sonnet-5" "claude-haiku-4-5-20251001")
-DEFAULT_STRONG_MODEL="claude-fable-5-1"
-DEFAULT_CHEAP_MODEL="claude-opus-5"
+# The menu is the account's entitled list, never a literal. A hardcoded list goes stale
+# silently: it offers models the account cannot run and hides ones it can.
+MODEL_MENU=()
+build_model_menu() {
+  local err list m rc=0
+  err=$(mktemp)
+  list=$("$SCRIPT_DIR/tools/model-lookup.py" --list-entitled 2>"$err") || rc=$?
+  if [ "$rc" -ne 0 ] || [ -z "${list//[[:space:]]/}" ]; then
+    printf 'LAUNCH REFUSED: %s --list-entitled\n  assertion: the entitled model list is readable\n%s\n  Fix: run it by hand to see why. There is no hardcoded fallback, because a stale list is the defect this replaced.\n' \
+      "$SCRIPT_DIR/tools/model-lookup.py" "$(sed 's/^/  /' "$err")" >&2
+    rm -f "$err"
+    return 1
+  fi
+  rm -f "$err"
+  MODEL_MENU=("$DEFAULT_STRONG_MODEL")
+  if [ "$DEFAULT_CHEAP_MODEL" != "$DEFAULT_STRONG_MODEL" ]; then
+    MODEL_MENU+=("$DEFAULT_CHEAP_MODEL")
+  fi
+  while IFS= read -r m; do
+    [ -n "$m" ] || continue
+    case "$m" in "$DEFAULT_STRONG_MODEL"|"$DEFAULT_CHEAP_MODEL") continue ;; esac
+    MODEL_MENU+=("$m")
+  done < <(printf '%s\n' "$list" | sort -u)
+}
 
 # pick_model <label> <default> — prints the chosen model id on stdout.
-# Input: 1-4 selects from MODEL_CHOICES, empty takes the default, anything
-# else is used verbatim as a model id.
+# A number selects from MODEL_MENU, empty takes the default, anything else is used
+# verbatim and validated with the rest before any pane starts.
 pick_model() {
-  local label="$1" default="$2" raw
+  local label="$1" default="$2" raw i
   echo "  $label model:" >&2
-  echo "    1) ${MODEL_CHOICES[0]}   2) ${MODEL_CHOICES[1]}   3) ${MODEL_CHOICES[2]}   4) ${MODEL_CHOICES[3]}" >&2
+  for i in "${!MODEL_MENU[@]}"; do
+    printf '    %2d) %s\n' "$((i+1))" "${MODEL_MENU[$i]}" >&2
+  done
   echo "    or type a model id" >&2
   read -p "  [default: $default] > " raw
   raw=$(echo "$raw" | tr -d '[:space:]')
-  case "$raw" in
-    "")      echo "$default" ;;
-    1|2|3|4) echo "${MODEL_CHOICES[$((raw-1))]}" ;;
-    *)       echo "$raw" ;;
-  esac
+  if [ -z "$raw" ]; then
+    echo "$default"
+  elif [[ "$raw" =~ ^[0-9]+$ ]] && [ "$raw" -ge 1 ] && [ "$raw" -le "${#MODEL_MENU[@]}" ]; then
+    echo "${MODEL_MENU[$((raw-1))]}"
+  else
+    echo "$raw"
+  fi
 }
+
+build_model_menu || exit 1
 
 echo "── Models ────────────────────────────────────────────────────────────────"
 echo "  1) Orchestrator strong, workers cheaper"
@@ -203,7 +234,6 @@ printf '%s' "$ACTIVE_PROJECT_VALUE" > "$SWARM_DIR/ACTIVE_PROJECT"
 
 # Refuse to start panes whose startup protocol would not load. The hook fails open at
 # runtime, so this is the last point where a broken one can still stop a launch.
-source "$SCRIPT_DIR/tools/launcher-common.sh"
 source "$SCRIPT_DIR/tools/preflight-hook.sh"
 ENGINES_ALL="${ENGINE_1:-claude} ${ENGINE_2:-claude} ${ENGINE_3:-claude} ${ENGINE_4:-claude}"
 CLAUDE_AGENTS=""

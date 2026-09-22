@@ -87,8 +87,8 @@ PERMS_FLAG=""
 source "$SCRIPT_DIR/tools/launcher-common.sh"
 
 # Orchestrator gets the best model at xhigh effort; workers get the 2nd model at high.
-ORCH_MODEL="claude-fable-5-1";  ORCH_EFFORT="xhigh"
-WORKER_MODEL="claude-opus-5"; WORKER_EFFORT="high"
+ORCH_MODEL="$DEFAULT_STRONG_MODEL";  ORCH_EFFORT="xhigh"
+WORKER_MODEL="$DEFAULT_CHEAP_MODEL"; WORKER_EFFORT="high"
 
 if ! validate_models "MODEL_1=$ORCH_MODEL
 EFFORT_1=$ORCH_EFFORT
