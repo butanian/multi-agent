@@ -11,8 +11,8 @@
 #   soft (default)  Send /clear to each pane. Same process, empty context.
 #   --hard          Actually kill claude (Ctrl-C + /exit) and relaunch a fresh
 #                   instance in each pane. For a crash, a wedged agent, or a
-#                   model change. Replays swarms/N/launch.env (falls back to
-#                   launch.sh defaults).
+#                   model change. Replays swarms/N/launch.env, and refuses
+#                   without it rather than guessing a model.
 #
 # Usage:
 #   ./restart-swarm.sh [swarm_id] [flags]
@@ -27,7 +27,7 @@
 #   --dry-run       Print every action without sending keystrokes. Safe on a
 #                   live swarm.
 #   --skip-perms    (--hard only) relaunch with --dangerously-skip-permissions
-#                   when launch.env is absent.
+#                   even if launch.env recorded otherwise.
 #   --timeout N     Seconds to wait for checkpoint sentinels (default 180).
 #   --self-delay N  Seconds the detached finisher waits before refreshing the
 #                   calling agent's own pane (default 8). In-swarm runs only.
@@ -45,11 +45,6 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CALLER_SWARM="${SWARM_ID:-}"
 CALLER_AGENT_ENV="${AGENT_NUMBER:-}"
 
-# ── Defaults (used by --hard when swarms/N/launch.env is missing) ────────────
-DEFAULT_ORCH_MODEL='claude-fable-5'
-DEFAULT_ORCH_EFFORT='xhigh'
-DEFAULT_WORKER_MODEL='claude-opus-5'
-DEFAULT_WORKER_EFFORT='high'
 DEFAULT_THINK_PROMPT='Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'
 
 # Tunables
@@ -139,6 +134,45 @@ fi
 SWARM_DIR="$SCRIPT_DIR/swarms/$TARGET_SWARM"
 [ -d "$SWARM_DIR" ] || die "No such swarm: $SWARM_DIR"
 [ -f "$SWARM_DIR/pane-config.sh" ] || die "Missing $SWARM_DIR/pane-config.sh (run launch.sh first)."
+
+# ── --hard only: load the replay parameters (mirrors launch.sh) ──────────────
+# Resolved here rather than beside the relaunch they feed, so an unreplayable
+# launch.env is refused before four agents are asked to checkpoint for it.
+if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ]; then
+  if [ ! -f "$SWARM_DIR/launch.env" ]; then
+    printf 'LAUNCH REFUSED: %s\n  assertion: a hard restart replays the parameters the swarm was launched with\n  nothing recorded them, and the launcher must not invent a model\n  Fix: run ./launch.sh to start a swarm, or drop --hard to /clear this one\n' \
+      "$SWARM_DIR/launch.env" >&2
+    exit 1
+  fi
+  MODEL=""; EFFORT=""; THINK_PROMPT="$DEFAULT_THINK_PROMPT"
+  SKIP_PERMS="n"
+  # shellcheck disable=SC1090
+  source "$SWARM_DIR/launch.env"
+  [ "$SKIP_PERMS_FLAG" = 1 ] && SKIP_PERMS="y"
+  PERMS_FLAG=""; [ "$SKIP_PERMS" = "y" ] && PERMS_FLAG="--dangerously-skip-permissions"
+  # Per-agent model/effort: MODEL_n/EFFORT_n from launch.env, else the plain
+  # MODEL/EFFORT an old-format launch.env sets.
+  AGENT_MODELS=(); AGENT_EFFORTS=(); AGENT_ENGINES=()
+  for a in 1 2 3 4; do
+    mvar="MODEL_$a"; evar="EFFORT_$a"
+    AGENT_MODELS[$a]="${!mvar:-${MODEL:-}}"
+    AGENT_EFFORTS[$a]="${!evar:-${EFFORT:-}}"
+    gvar="ENGINE_$a"; AGENT_ENGINES[$a]="${!gvar:-claude}"
+  done
+
+  # Completeness is checked here, not left to the model validator: that one is
+  # skippable and a missing value is not a bad value, it is an absent replay.
+  MISSING=""
+  for a in 1 2 3 4; do
+    [ -n "${AGENT_MODELS[$a]}" ]  || MISSING="$MISSING MODEL_$a"
+    [ -n "${AGENT_EFFORTS[$a]}" ] || MISSING="$MISSING EFFORT_$a"
+  done
+  if [ -n "$MISSING" ]; then
+    printf 'LAUNCH REFUSED: %s\n  assertion: every pane has a recorded model and effort to replay\n  missing:%s\n  an empty value reaches the pane verbatim, starting it on no model at all\n  Fix: add the missing keys, or run ./launch.sh to start a swarm\n' \
+      "$SWARM_DIR/launch.env" "$MISSING" >&2
+    exit 1
+  fi
+fi
 
 # shellcheck disable=SC1090
 source "$SWARM_DIR/pane-config.sh"
@@ -347,33 +381,6 @@ if [ "$SAVE_ONLY" = 1 ]; then
   exit 0
 fi
 
-# ── --hard only: build the relaunch commands (mirrors launch.sh) ─────────────
-if [ "$MODE" = "hard" ]; then
-  MODEL=""; EFFORT=""; THINK_PROMPT="$DEFAULT_THINK_PROMPT"
-  SKIP_PERMS="n"; [ "$SKIP_PERMS_FLAG" = 1 ] && SKIP_PERMS="y"
-  if [ -f "$SWARM_DIR/launch.env" ]; then
-    # shellcheck disable=SC1090
-    source "$SWARM_DIR/launch.env"
-  else
-    warn "No launch.env; using launch.sh defaults (orchestrator=$DEFAULT_ORCH_MODEL/$DEFAULT_ORCH_EFFORT workers=$DEFAULT_WORKER_MODEL/$DEFAULT_WORKER_EFFORT skip_perms=$SKIP_PERMS)."
-  fi
-  PERMS_FLAG=""; [ "$SKIP_PERMS" = "y" ] && PERMS_FLAG="--dangerously-skip-permissions"
-  # Per-agent model/effort: MODEL_n/EFFORT_n from launch.env, else the plain
-  # MODEL/EFFORT an old-format launch.env sets, else the per-role defaults above.
-  AGENT_MODELS=(); AGENT_EFFORTS=(); AGENT_ENGINES=()
-  for a in 1 2 3 4; do
-    if [ "$a" = 1 ]; then
-      dm="$DEFAULT_ORCH_MODEL"; de="$DEFAULT_ORCH_EFFORT"
-    else
-      dm="$DEFAULT_WORKER_MODEL"; de="$DEFAULT_WORKER_EFFORT"
-    fi
-    mvar="MODEL_$a"; evar="EFFORT_$a"
-    AGENT_MODELS[$a]="${!mvar:-${MODEL:-$dm}}"
-    AGENT_EFFORTS[$a]="${!evar:-${EFFORT:-$de}}"
-    gvar="ENGINE_$a"; AGENT_ENGINES[$a]="${!gvar:-claude}"
-  done
-fi
-
 # Full shell line that relaunches a given agent in its pane (--hard).
 launch_line_for() {
   local a="$1" role="" model effort effort_label="" claude_cmd
@@ -433,9 +440,11 @@ EFFORT_$_a=${AGENT_EFFORTS[$_a]:-}"
   _eng="$_eng ${AGENT_ENGINES[$_a]:-claude}"
   case "${AGENT_ENGINES[$_a]:-claude}" in ""|claude) _claude_agents="$_claude_agents $_a" ;; esac
 done
-report_engine_gating "$_eng"
-if ! validate_models "$_mv" "$_eng"; then
-  exit 1
+if [ "$MODE" = "hard" ]; then
+  report_engine_gating "$_eng"
+  if ! validate_models "$_mv" "$_eng"; then
+    exit 1
+  fi
 fi
 if [ -n "${SWARM_SKIP_PREFLIGHT:-}" ]; then
   echo "  WARNING: SWARM_SKIP_PREFLIGHT is set. Launching WITHOUT verifying the startup hook." >&2
@@ -583,4 +592,6 @@ fi
 step "Done."
 log "  Swarm $TARGET_SWARM refreshed ($MODE). Snapshots kept under swarms/$TARGET_SWARM/checkpoints/."
 delivery_summary
-[ -n "$CALLER_AGENT" ] && log "  Your own pane (Agent $CALLER_AGENT) refreshes in ~${SELF_DELAY}s via the detached finisher."
+if [ -n "$CALLER_AGENT" ]; then
+  log "  Your own pane (Agent $CALLER_AGENT) refreshes in ~${SELF_DELAY}s via the detached finisher."
+fi
