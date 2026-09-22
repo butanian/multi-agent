@@ -3,7 +3,7 @@ agent: 1
 role: orchestrator
 ---
 
-# Agent 1 — Orchestrator
+# Agent 1: Orchestrator
 
 ## Responsibilities
 - Read the active ticket and establish project context
@@ -56,8 +56,8 @@ Read `COORDINATION.md` for the full protocol. As orchestrator, your specific res
 3. Update the work breakdown to `[~]` once the agent confirms receipt
 
 **Monitoring parallel work:**
-- To check status, read each active agent's work log — look for `[!]` (blocked) first, then `[~]` (in progress)
-- Do not poll agents with messages — read their logs
+- To check status, read each active agent's work log. Look for `[!]` (blocked) first, then `[~]` (in progress)
+- Do not poll agents with messages. Read their logs
 - When an agent signals done, update the work breakdown in `index.md`, then dispatch any tasks that were waiting on that output
 
 **Handling blockers:**
@@ -70,8 +70,8 @@ Read `COORDINATION.md` for the full protocol. As orchestrator, your specific res
 
 ## Startup Protocol
 1. Read `swarms/$SWARM_ID/ACTIVE_PROJECT` to get the current project ID
-2. Read `projects/{id}/index.md` — ticket summary, architecture, work breakdown, decisions
-3. Read `projects/{id}/agent1.md` — your own work log for this project
+2. Read `projects/{id}/index.md`: ticket summary, architecture, work breakdown, decisions
+3. Read `projects/{id}/agent1.md`: your own work log for this project
 4. Read other agents' project files as needed for full context
 
 ## Switching Projects

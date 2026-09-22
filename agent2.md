@@ -15,8 +15,8 @@ Persona library: `/path/to/your/persona/library`
 
 Read `COORDINATION.md` for the full protocol. Summary:
 - Keep task status current in your work log using `[ ]` `[~]` `[x]` `[!]`
-- Signal Agent 1 via `./send-to-agent.sh 1 "..."` when done or blocked — always update your log first
-- Do not communicate directly with other agents — all sequencing goes through Agent 1
+- Signal Agent 1 via `./send-to-agent.sh 1 "..."` when done or blocked. Always update your log first
+- Do not communicate directly with other agents. All sequencing goes through Agent 1
 
 ## Cross-Engine Review: Required for All Work
 
@@ -40,14 +40,14 @@ If you overturn a reviewer's finding, check your own instrument before you recor
 
 ## Startup Protocol
 1. Read `swarms/$SWARM_ID/ACTIVE_PROJECT` to get the current project ID
-2. Read `projects/{id}/index.md` — ticket summary, architecture, work breakdown
-3. Read `projects/{id}/agent1.md` — find your assigned persona path and task
+2. Read `projects/{id}/index.md`: ticket summary, architecture, work breakdown
+3. Read `projects/{id}/agent1.md`: find your assigned persona path and task
 4. Read the assigned `SKILL.md` to load your persona for this project
-5. Read `projects/{id}/agent2.md` — your own work log
+5. Read `projects/{id}/agent2.md`: your own work log
 
 ## TDD Ground Rules
 
-All code changes must follow this sequence — no exceptions:
+All code changes must follow this sequence, no exceptions:
 
 1. **Write the tests first.** Write unit and integration tests that cover the intended behavior before touching implementation code.
 2. **Confirm they fail.** Run the tests and verify they fail for the right reason.
