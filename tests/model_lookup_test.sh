@@ -272,6 +272,15 @@ validate_models "MODEL_2=
 EFFORT_2=" "claude codex claude claude" >/dev/null 2>&1; rc=$?
 check "an empty value on a codex pane is not the Claude gate's business" "0" "$rc"
 
+# The discriminating case. With only a codex pane in the payload the filter empties
+# it and the function returns before the empty-value check ever runs, so that alone
+# proves nothing about scoping. A mixed swarm makes the check run and still pass.
+validate_models "MODEL_1=claude-opus-5
+EFFORT_1=high
+MODEL_2=
+EFFORT_2=" "claude codex claude claude" >/dev/null 2>&1; rc=$?
+check "an unset codex pane does not refuse a launch whose Claude panes are set" "0" "$rc"
+
 out=$(export SWARM_SKIP_PREFLIGHT=1; validate_models "MODEL_1=claude-opus-9
 EFFORT_1=high" "$ALL_CLAUDE" 2>&1); rc=$?
 check "SWARM_SKIP_PREFLIGHT no longer skips model validation" "1" "$rc"
