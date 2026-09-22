@@ -11,8 +11,8 @@ bad() { printf '  FAIL  %s\n' "$1"; FAIL=$((FAIL+1)); }
 
 # The validator stub stands in for the strict validator S222-A is landing (D71): it
 # records every call and refuses an empty id, which is what an absent default now yields.
-mksandbox() { # $1 = script under test, $2 = env|env-nomodels|noenv [, $3 = SKIP_PERMS]
-  local script=$1 want_env=$2 perms=${3:-y} t
+mksandbox() { # $1 = script, $2 = env|env-nomodels|noenv [, $3 = SKIP_PERMS [, $4 = strict|permissive]]
+  local script=$1 want_env=$2 perms=${3:-y} validator=${4:-strict} t
   t=$(mktemp -d)
   cp "$script" "$t/restart-swarm.sh"
   cp -R "$REPO/tools" "$t/tools"
@@ -30,7 +30,18 @@ for g in d.get("hooks",{}).get("SessionStart",[]):
 json.dump(d,open(p,"w"))
 PS
   printf '#!/usr/bin/env bash\nexit 0\n' > "$t/send-to-agent.sh"
-  cat > "$t/tools/model-lookup.py" <<'STUB'
+  if [ "$validator" = permissive ]; then
+    # What tools/model-lookup.py does TODAY: an empty id is "the launcher falls back
+    # to its default" and passes. The refusal must not be delegated to it.
+    cat > "$t/tools/model-lookup.py" <<'STUB'
+#!/usr/bin/env bash
+d=$(cd "$(dirname "$0")" && pwd)
+echo call >> "$d/../validator-calls"
+cat >/dev/null
+exit 0
+STUB
+  else
+    cat > "$t/tools/model-lookup.py" <<'STUB'
 #!/usr/bin/env bash
 d=$(cd "$(dirname "$0")" && pwd)
 echo call >> "$d/../validator-calls"
@@ -40,6 +51,7 @@ while IFS= read -r l; do
 done
 exit $rc
 STUB
+  fi
   chmod +x "$t/send-to-agent.sh" "$t/tools/model-lookup.py"
   cat > "$t/swarms/$SID/pane-config.sh" <<'PC'
 AGENT_1_SESSION="UUID-A1"
@@ -76,10 +88,20 @@ PE
   echo "$t"
 }
 
+withproject() { # give the sandbox work logs, so Phase 1 does not take its no-op path
+  mkdir -p "$1/projects/probeproj"
+  printf '# log\n' > "$1/projects/probeproj/agent1.md"
+}
+
 OUT=""; RC=0
 run() { # $1 = sandbox dir, rest = restart-swarm.sh args after the swarm id
   local t=$1; shift
   OUT=$( cd "$t" && env -u SWARM_ID -u AGENT_NUMBER bash restart-swarm.sh "$SID" --dry-run "$@" 2>&1 ); RC=$?
+}
+run_skipping_preflight() {
+  local t=$1; shift
+  OUT=$( cd "$t" && env -u SWARM_ID -u AGENT_NUMBER SWARM_SKIP_PREFLIGHT=1 \
+           bash restart-swarm.sh "$SID" --dry-run "$@" 2>&1 ); RC=$?
 }
 called() { [ -f "$1/validator-calls" ]; }
 
@@ -90,13 +112,12 @@ import sys
 src, which, dst = sys.argv[1], sys.argv[2], sys.argv[3]
 s = open(src).read()
 if which == "no-refusal":
-    old = """  else
-    printf 'LAUNCH REFUSED"""
-    i = s.find(old)
-    if i < 0: sys.exit("control anchor moved: the launch.env refusal")
-    j = s.find("\n  fi\n", i)
-    if j < 0: sys.exit("control anchor moved: end of the refusal arm")
-    s = s[:i] + "  else\n    :\n" + s[j+1:]
+    head = 'if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ] && [ ! -f "$SWARM_DIR/launch.env" ]; then'
+    i = s.find(head)
+    if i < 0: sys.exit("control anchor moved: the missing-launch.env guard")
+    j = s.find("\nfi\n", i)
+    if j < 0: sys.exit("control anchor moved: end of the missing-launch.env guard")
+    s = s[:i] + s[j+4:]
 elif which == "no-mode-guard":
     old = """if [ "$MODE" = "hard" ]; then
   report_engine_gating "$_eng"
@@ -136,13 +157,22 @@ case "$OUT" in *launch.sh*) ok "refusal tells the user to run launch.sh" ;; *) b
 case "$OUT" in *"would type into"*) bad "it typed into a pane before refusing" ;; *) ok "no pane command was produced" ;; esac
 rm -rf "$t"
 
+echo "--- and it refuses before asking four agents to checkpoint ---"
+t=$(mksandbox "$REPO/restart-swarm.sh" noenv); withproject "$t"; run "$t" --hard
+case "$OUT" in *"Phase 1"*) bad "agents were asked to checkpoint for a restart that cannot happen" ;;
+  *) ok "no checkpoint phase ran" ;; esac
+case "$OUT" in *"Phase 2"*) bad "it snapshotted before refusing" ;; *) ok "no snapshot phase ran" ;; esac
+rm -rf "$t"
+
 echo "--- control: with the refusal neutered, that assertion goes red ---"
 REG=$(mktemp)
 if regress no-refusal "$REG"; then
-  t=$(mksandbox "$REG" noenv); run "$t" --hard
+  t=$(mksandbox "$REG" noenv); withproject "$t"; run "$t" --hard
   case "$OUT" in *"LAUNCH REFUSED"*"/swarms/$SID/launch.env"*)
       bad "neutered copy still printed the launch.env refusal, so the check proves nothing" ;;
     *)  ok "neutered copy does not print it (the check is keyed on the refusal, not on any failure)" ;; esac
+  case "$OUT" in *"Phase 1"*) ok "and it does reach the checkpoint phase (the earliness check can fail)" ;;
+    *) bad "neutered copy also skipped Phase 1, so the earliness check proves nothing" ;; esac
   rm -rf "$t"
 else bad "could not build the no-refusal control"; fi
 rm -f "$REG"
@@ -162,6 +192,16 @@ case "$OUT" in *claude-fable*|*claude-opus*|*claude-sonnet*) bad "a model id was
   *) ok "no model id appears anywhere in the run" ;; esac
 rm -rf "$t"
 
+echo "--- the empty-model refusal is local, not delegated to a skippable validator ---"
+t=$(mksandbox "$REPO/restart-swarm.sh" env-nomodels y permissive); run_skipping_preflight "$t" --hard
+[ "$RC" -ne 0 ] && ok "refused with a permissive validator and SWARM_SKIP_PREFLIGHT=1 (rc=$RC)" \
+                || bad "an empty model survived both, so the check is delegated"
+case "$OUT" in *"--model ''"*) bad "a pane was relaunched on an empty model" ;;
+  *) ok "no pane command carries an empty model" ;; esac
+case "$OUT" in *MODEL_1*) ok "the refusal names the field that is empty" ;;
+  *) bad "the refusal does not say which value is missing: $OUT" ;; esac
+rm -rf "$t"
+
 echo "--- soft needs no launch.env and is not model-validated ---"
 t=$(mksandbox "$REPO/restart-swarm.sh" noenv); run "$t"
 [ "$RC" -eq 0 ] && ok "soft without launch.env succeeds (rc=$RC)" || bad "soft without launch.env failed: $OUT"
@@ -175,6 +215,8 @@ if regress no-mode-guard "$REG"; then
   t=$(mksandbox "$REG" noenv); run "$t"
   called "$t" && ok "unguarded copy does validate in soft (the check can fail)" \
                || bad "unguarded copy still skipped the validator, so the check proves nothing"
+  [ "$RC" -ne 0 ] && ok "and a strict validator then fails the soft refresh outright (rc=$RC)" \
+                  || bad "unguarded copy validated but still exited 0, so the harm is unproven"
   rm -rf "$t"
 else bad "could not build the no-mode-guard control"; fi
 rm -f "$REG"
