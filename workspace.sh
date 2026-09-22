@@ -86,6 +86,12 @@ PERMS_FLAG=""
 
 source "$SCRIPT_DIR/tools/launcher-common.sh"
 
+if [ -z "${DEFAULT_STRONG_MODEL:-}" ] || [ -z "${DEFAULT_CHEAP_MODEL:-}" ]; then
+  printf 'LAUNCH REFUSED: %s\n  assertion: DEFAULT_STRONG_MODEL and DEFAULT_CHEAP_MODEL are both set\n  one is empty, so panes would start as: claude --model %s\n' \
+    "$SCRIPT_DIR/tools/launcher-common.sh" "''" >&2
+  exit 1
+fi
+
 # Orchestrator gets the best model at xhigh effort; workers get the 2nd model at high.
 ORCH_MODEL="$DEFAULT_STRONG_MODEL";  ORCH_EFFORT="xhigh"
 WORKER_MODEL="$DEFAULT_CHEAP_MODEL"; WORKER_EFFORT="high"

@@ -55,6 +55,11 @@ PERMS_FLAG=""
 MODEL_MENU=()
 build_model_menu() {
   local err list m rc=0
+  if [ -z "${DEFAULT_STRONG_MODEL:-}" ] || [ -z "${DEFAULT_CHEAP_MODEL:-}" ]; then
+    printf 'LAUNCH REFUSED: %s\n  assertion: DEFAULT_STRONG_MODEL and DEFAULT_CHEAP_MODEL are both set\n  one is empty, so panes would start as: claude --model %s\n  Fix: define both in tools/launcher-common.sh\n' \
+      "$SCRIPT_DIR/tools/launcher-common.sh" "''" >&2
+    return 1
+  fi
   err=$(mktemp)
   list=$("$SCRIPT_DIR/tools/model-lookup.py" --list-entitled 2>"$err") || rc=$?
   if [ "$rc" -ne 0 ] || [ -z "${list//[[:space:]]/}" ]; then
@@ -64,6 +69,14 @@ build_model_menu() {
     return 1
   fi
   rm -f "$err"
+  # rc 0 with the wrong shape is the same failure in disguise: model-lookup.py ignores an
+  # unrecognised flag and prints its human report, which would become the menu.
+  if printf '%s\n' "$list" | /usr/bin/grep -qvE '^[A-Za-z0-9._-]+(\[1m\])?$|^$'; then
+    printf 'LAUNCH REFUSED: %s --list-entitled\n  assertion: it prints bare model ids, one per line\n  first offending line: %s\n  Fix: the flag is unimplemented or the output format changed.\n' \
+      "$SCRIPT_DIR/tools/model-lookup.py" \
+      "$(printf '%s\n' "$list" | /usr/bin/grep -m1 -vE '^[A-Za-z0-9._-]+(\[1m\])?$|^$')" >&2
+    return 1
+  fi
   MODEL_MENU=("$DEFAULT_STRONG_MODEL")
   if [ "$DEFAULT_CHEAP_MODEL" != "$DEFAULT_STRONG_MODEL" ]; then
     MODEL_MENU+=("$DEFAULT_CHEAP_MODEL")
@@ -89,8 +102,10 @@ pick_model() {
   raw=$(echo "$raw" | tr -d '[:space:]')
   if [ -z "$raw" ]; then
     echo "$default"
-  elif [[ "$raw" =~ ^[0-9]+$ ]] && [ "$raw" -ge 1 ] && [ "$raw" -le "${#MODEL_MENU[@]}" ]; then
-    echo "${MODEL_MENU[$((raw-1))]}"
+  elif [[ "$raw" =~ ^[0-9]{1,3}$ ]] && [ "$((10#$raw))" -ge 1 ] && [ "$((10#$raw))" -le "${#MODEL_MENU[@]}" ]; then
+    # 10# because $(( )) reads a leading zero as octal while [ -le ] reads it as decimal,
+    # so 010 passed the bounds check and then indexed the 8th entry.
+    echo "${MODEL_MENU[$((10#$raw - 1))]}"
   else
     echo "$raw"
   fi
