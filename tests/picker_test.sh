@@ -30,7 +30,7 @@ is_bare_list $'MODELS (modelAccessCache)\n  x claude-fable-5   ' \
 if ! elist=$("$REPO/tools/model-lookup.py" --list-entitled 2>/dev/null); then
   bad "model-lookup.py --list-entitled is missing or fails, so every launch refuses"
 elif ! is_bare_list "$elist"; then
-  bad "--list-entitled is not implemented: the tool ignored the flag and printed its human report"
+  bad "--list-entitled exited 0 but printed something other than bare ids, first offending line: $(printf '%s\n' "$elist" | /usr/bin/grep -m1 -vE '^[A-Za-z0-9._-]+(\[1m\])?$')"
 elif ! printf 'MODEL_1=%s\nEFFORT_1=high\n' "$(printf '%s\n' "$elist" | head -1)" \
      | python3 "$REPO/tools/model-lookup.py" --check - >/dev/null 2>&1; then
   # Shape alone would accept a list of bare words like "ALIASES". Ask the validator
