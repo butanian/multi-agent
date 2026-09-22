@@ -43,6 +43,24 @@ engine_cmd() {
   esac
 }
 
+# report_engine_gating "<engine per pane, space separated>"
+# A pane the gates skip must say so. An unannounced exclusion reads as a gated pane,
+# which is the failure this whole swarm has been removing.
+report_engine_gating() {
+  local engines=$1 i=0 e excluded=""
+  for e in $engines; do
+    i=$((i+1))
+    case "$e" in
+      ""|claude) ;;
+      *) excluded="$excluded $i"
+         echo "  pane $i: $e, NOT preflighted, NOT model-validated (AGENTS.md is its startup contract)" >&2 ;;
+    esac
+  done
+  if [ -z "$excluded" ]; then
+    echo "  all $i panes: claude, preflighted and model-validated." >&2
+  fi
+}
+
 # validate_models "<LABEL=value newline-separated>"
 # An unknown --effort does not fail the CLI, it warns and silently uses the default, and
 # an effort above a model's cap is silently downgraded. Both are invisible at runtime,

@@ -213,6 +213,8 @@ for _e in $ENGINES_ALL; do
   case "$_e" in ""|claude) CLAUDE_AGENTS="$CLAUDE_AGENTS $_i" ;; esac
 done
 
+report_engine_gating "$ENGINES_ALL"
+
 if ! validate_models "MODEL_1=$MODEL_1
 EFFORT_1=$EFFORT_1
 MODEL_2=$MODEL_2
@@ -345,7 +347,7 @@ echo "  Agent 2:       $ID2  ·  $MODEL_2 · effort $EFFORT_2"
 echo "  Agent 3:       $ID3  ·  $MODEL_3 · effort $EFFORT_3"
 echo "  Agent 4:       $ID4  ·  $MODEL_4 · effort $EFFORT_4"
 echo ""
-echo "Claude is starting in all 4 panes."
+echo "Engines starting: $ENGINES_ALL"
 echo ""
 
 # ── Startup kick ───────────────────────────────────────────────────────────────

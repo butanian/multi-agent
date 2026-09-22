@@ -71,6 +71,29 @@ else
   ok "a claude pane's model is still validated"
 fi
 
+echo "--- an excluded codex pane must be VISIBLE, never silently ungated ---"
+if ! /usr/bin/grep -q 'report_engine_gating' tools/launcher-common.sh; then
+  bad "no report_engine_gating; an excluded pane would be silent"
+else
+  out=$(report_engine_gating "claude codex claude claude" 2>&1)
+  has "$out" "pane 2" && ok "names the excluded pane" || bad "does not name the excluded pane: $out"
+  has "$out" "codex" && ok "names its engine" || bad "does not name the engine: $out"
+  /usr/bin/grep -qi 'not preflighted' <<< "$out" && ok "says it is not preflighted" || bad "does not say it is unpreflighted: $out"
+  /usr/bin/grep -qi 'not model-validated' <<< "$out" && ok "says it is not model-validated" || bad "does not say it is unvalidated: $out"
+  case "$out" in *"pane 1"*) bad "listed a claude pane as excluded" ;; *) ok "does not list claude panes as excluded" ;; esac
+
+  allc=$(report_engine_gating "claude claude claude claude" 2>&1)
+  [ -n "$(printf '%s' "$allc" | tr -d '[:space:]')" ] && ok "all-claude still states the gating status" \
+    || bad "all-claude printed nothing, so a reader cannot tell gating ran"
+  /usr/bin/grep -qi 'not preflighted' <<< "$allc" && bad "all-claude wrongly reports an exclusion" \
+    || ok "all-claude reports no exclusions"
+fi
+
+echo "--- and the launchers actually call it ---"
+for f in launch.sh restart-swarm.sh; do
+  /usr/bin/grep -q 'report_engine_gating' "$f" && ok "$f reports engine gating" || bad "$f never reports engine gating"
+done
+
 echo
 echo "  $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

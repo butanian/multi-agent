@@ -433,6 +433,7 @@ EFFORT_$_a=${AGENT_EFFORTS[$_a]:-}"
   _eng="$_eng ${AGENT_ENGINES[$_a]:-claude}"
   case "${AGENT_ENGINES[$_a]:-claude}" in ""|claude) _claude_agents="$_claude_agents $_a" ;; esac
 done
+report_engine_gating "$_eng"
 if ! validate_models "$_mv" "$_eng"; then
   exit 1
 fi
