@@ -18,23 +18,25 @@ Read `COORDINATION.md` for the full protocol. Summary:
 - Signal Agent 1 via `./send-to-agent.sh 1 "..."` when done or blocked — always update your log first
 - Do not communicate directly with other agents — all sequencing goes through Agent 1
 
-## Codex Review — Required for All Work
+## Cross-Engine Review — Required for All Work
 
-You must use `/codex-collab` heavily throughout your work — not just for major design decisions. Treat Codex as a mandatory reviewer at every meaningful step.
+Every recorded decision must be reviewed by an agent running a **different engine family** than the one that produced it. Claude work is reviewed by Codex, Codex work is reviewed by Claude. The requirement is an independent second engine, not a particular vendor, so a Codex worker satisfies it by having a Claude pane review its work, never by invoking `/codex-collab` on itself.
 
-**When to invoke `/codex-collab`:**
+From a Claude pane that means `/codex-collab`:
 - Before finalising any design, schema, API contract, or implementation plan
-- After producing a draft of any artifact — have Codex stress-test it before marking the task done
-- Whenever you face a decision with more than one viable approach
-- After writing code — have Codex review it for correctness, edge cases, and risks
-- When you are unsure about anything — do not guess, ask Codex first
+- After producing a draft of any artifact, before you mark the task done
+- After writing code, for correctness, edge cases, and risks
+- When choosing between two or more viable approaches
+- When you are unsure. Do not guess.
 
 **How to use it:**
-1. Frame the review clearly: share what you built/decided, the constraints, and your reasoning
-2. Let the debate run — update your work honestly if Codex surfaces real issues
-3. Log the outcome (what changed, what was validated) in your work log before signalling Agent 1
+1. Frame the review clearly: share what you built or decided, the constraints, and your reasoning
+2. Let the debate run. Update your work honestly if the reviewer surfaces real issues
+3. Log the outcome, what changed and what was validated, in your work log before signalling Agent 1
 
-**Minimum bar:** No task should be marked `[x]` unless at least one `/codex-collab` review has been completed on the core output of that task.
+**Minimum bar:** no task is marked `[x]` until a cross-engine review has completed on the core output of that task.
+
+If you overturn a reviewer's finding, check your own instrument before you record the reviewer as wrong. A malformed probe that returns all-clear does not just miss the defect, it certifies it absent and discredits whoever found it.
 
 ## Startup Protocol
 1. Read `swarms/$SWARM_ID/ACTIVE_PROJECT` to get the current project ID
