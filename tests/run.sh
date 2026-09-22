@@ -3,7 +3,7 @@
 # Exits non-zero if any test file fails, if none are found, or if files went missing.
 # MIN_SUITES guards against silent loss: a rename or bad glob must be loud, not green.
 # Bump it when adding a suite; it only fires when files DISAPPEAR.
-MIN_SUITES=7
+MIN_SUITES=8
 cd "$(dirname "$0")"
 rc=0
 found=0

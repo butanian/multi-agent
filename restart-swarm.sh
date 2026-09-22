@@ -200,6 +200,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & theUuid
 end run
 APPLESCRIPT
 }
@@ -223,6 +224,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & theUuid
 end run
 APPLESCRIPT
 }
@@ -240,7 +242,7 @@ on run argv
   set theUuid to item 1 of argv
   set theFile to item 2 of argv
   set fileRef to open for access (POSIX file theFile)
-  set theText to read fileRef
+  set theText to read fileRef as «class utf8»
   close access fileRef
   tell application "iTerm2"
     repeat with w in windows
@@ -254,6 +256,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & theUuid
 end run
 APPLESCRIPT
 }
@@ -386,21 +389,33 @@ launch_line_for() {
 }
 
 # Refresh one peer pane in place (soft = /clear, hard = exit + relaunch).
+# A pane whose window has closed must be reported, never skipped in silence: this
+# script exists to preserve context across a refresh, and quietly missing a pane loses
+# exactly the thing it was run to keep. Always returns 0 so one dead pane does not
+# abort the refresh of the others; the delivery summary states the totals.
 refresh_peer() {
   local a="$1" uuid; uuid="$(uuid_for "$a")"
-  [ -n "$uuid" ] || { warn "No session id for Agent $a; skipping."; return; }
+  [ -n "$uuid" ] || { warn "No session id for Agent $a; NOT refreshed."; record_send "$a" 1; return 0; }
+  _gone() { warn "Agent $a: pane not found ($1); NOT refreshed, its context is unchanged."; record_send "$a" 1; }
   if [ "$MODE" = "hard" ]; then
     log "    Agent $a: kill + relaunch ..."
-    interrupt_pane "$uuid"; sleep 0.7
-    type_in_pane "$uuid" "/exit"; [ "$DRY_RUN" = 1 ] || sleep 2.5
+    interrupt_pane "$uuid" || { _gone "interrupt"; return 0; }
+    sleep 0.7
+    type_in_pane "$uuid" "/exit" || { _gone "/exit"; return 0; }
+    [ "$DRY_RUN" = 1 ] || sleep 2.5
     local line_file="$TMP_LINES/agent$a.line"
     launch_line_for "$a" > "$line_file"
-    write_line_to_pane "$uuid" "$line_file"
+    write_line_to_pane "$uuid" "$line_file" || { _gone "relaunch line"; return 0; }
   else
     log "    Agent $a: /clear ..."
-    [ "$FORCE" = 1 ] && { interrupt_pane "$uuid"; sleep 0.5; }
-    type_in_pane "$uuid" "/clear"
+    if [ "$FORCE" = 1 ]; then
+      interrupt_pane "$uuid" || { _gone "interrupt"; return 0; }
+      sleep 0.5
+    fi
+    type_in_pane "$uuid" "/clear" || { _gone "/clear"; return 0; }
   fi
+  record_send "$a" 0
+  return 0
 }
 
 # Refuse to start panes whose startup protocol would not load. The hook fails open at
@@ -459,6 +474,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & u
 end run
 A1
 sleep 2.5
@@ -467,7 +483,7 @@ on run argv
   set u to item 1 of argv
   set f to item 2 of argv
   set fr to open for access (POSIX file f)
-  set txt to read fr
+  set txt to read fr as «class utf8»
   close access fr
   tell application "iTerm2"
     repeat with w in windows
@@ -481,6 +497,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & u
 end run
 A2
 sleep $INIT_WAIT
@@ -503,6 +520,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & u
 end run
 A1
 sleep 2
