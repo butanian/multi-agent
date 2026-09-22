@@ -37,7 +37,10 @@ fi
 
 # For large messages, write to a persistent file and send a reference instead
 if [ ${#MESSAGE} -gt $LARGE_MSG_THRESHOLD ]; then
-  CONTENT_FILE=$(mktemp /tmp/agent_content_XXXXXX.md)
+  # NOTE: macOS mktemp only substitutes TRAILING X's. A ".md" suffix after the
+  # X's makes it create a literal "agent_content_XXXXXX.md", which collides on
+  # parallel sends. Keep the X's trailing.
+  CONTENT_FILE=$(mktemp /tmp/agent_content_XXXXXX)
   printf '%s' "$MESSAGE" > "$CONTENT_FILE"
   SEND_MSG="[Message too large for inline send — read your full instructions from: $CONTENT_FILE]"
   echo "Content saved to $CONTENT_FILE (${#MESSAGE} chars)"
@@ -53,7 +56,7 @@ printf '%s' "$SEND_MSG" > "$TMPFILE"
 osascript << APPLESCRIPT
 set msgFile to "$TMPFILE"
 set fileRef to open for access (POSIX file msgFile)
-set msgContent to read fileRef
+set msgContent to read fileRef as «class utf8»
 close access fileRef
 
 tell application "iTerm2"
@@ -62,11 +65,7 @@ tell application "iTerm2"
       repeat with s in sessions of t
         if unique id of s is "$SESSION_ID" then
           tell s
-            write text msgContent without newline
-          end tell
-          delay 0.3
-          tell s
-            write text ""
+            write text msgContent
           end tell
           return
         end if
@@ -74,7 +73,23 @@ tell application "iTerm2"
     end repeat
   end repeat
 end tell
+error "no live iTerm2 session with unique id $SESSION_ID"
 APPLESCRIPT
+OSA_STATUS=$?
 
 rm -f "$TMPFILE"
+
+# Append-only delivery ledger. A pointer that turns up in the wrong pane is only
+# traceable if every send is recorded somewhere /tmp cannot evaporate.
+mkdir -p "$SCRIPT_DIR/logs"
+printf '%s\tswarm=%s\tfrom=%s\tto=%s\tsession=%s\tbytes=%s\tfile=%s\toutcome=%s\n' \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SWARM_ID" "${AGENT_NUMBER:-external}" "$AGENT" \
+  "$SESSION_ID" "${#MESSAGE}" "${CONTENT_FILE:-none}" \
+  "$([ "$OSA_STATUS" -eq 0 ] && echo written || echo FAILED)" >> "$SCRIPT_DIR/logs/send.log"
+
+if [ "$OSA_STATUS" -ne 0 ]; then
+  echo "Error: message NOT delivered to Agent $AGENT (osascript exit $OSA_STATUS)." >&2
+  exit 1
+fi
+
 echo "Message sent to Agent $AGENT (session $SESSION_ID)"
