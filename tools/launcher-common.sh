@@ -5,8 +5,8 @@
 
 LAUNCHER_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)"
 
-DEFAULT_STRONG_MODEL="claude-fable-5-1"
-DEFAULT_CHEAP_MODEL="claude-opus-5"
+DEFAULT_STRONG_MODEL="claude-opus-5-5"
+DEFAULT_CHEAP_MODEL="claude-opus-5-5"
 
 # Pane 1 only. Narrows the tool set and adds a path-scoped Read deny. The deny is a
 # speed bump, not containment: Bash stays available so writes are unrestricted, and any

@@ -1,5 +1,8 @@
 swarms/
 projects/
+incident-refund-email/
+team-directory/
+documentation/
 docs/
 registry.md
 .DS_Store

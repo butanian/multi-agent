@@ -1,8 +1,12 @@
 {
   "mcpServers": {
-    "codex": {
-      "command": "codex",
-      "args": ["mcp"]
+    "snowflake": {
+      "command": "uvx",
+      "args": [
+        "snowflake-labs-mcp",
+        "--service-config-file", "~/.claude/mcp-snowflake-config.yaml",
+        "--connection-name", "playonsports-sso"
+      ]
     }
   }
 }

@@ -14,14 +14,14 @@ A multi-agent Claude Code workspace where 4 coordinated agents run simultaneousl
 └─────────────┴─────────────┘
 ```
 
-- **Agent 1** — Orchestrator: breaks down work, assigns personas, coordinates
-- **Agents 2, 3, 4** — Workers: receive tasks and personas from Agent 1
+- **Agent 1**, the orchestrator: breaks down work, assigns personas, coordinates
+- **Agents 2, 3, 4**, the workers: receive tasks and personas from Agent 1
 
 ## Prerequisites
 
 - macOS with iTerm2 installed
 - Claude Code CLI (`claude`) installed and authenticated
-- Node.js/npm (for Codex CLI — used by the `/codex-collab` skill)
+- Node.js/npm (for the Codex CLI, used by the `/codex-collab` skill)
 
 ## Setup
 
@@ -38,13 +38,13 @@ Examples:
 ```
 
 This creates:
-- `agent1.md` – `agent4.md` — Agent instruction files
-- `COORDINATION.md` — Shared coordination protocol
-- `registry.md` — Project registry
-- `projects/` — Per-project work logs
-- `send-to-agent.sh` — Message passing between agents
-- `.mcp.json` — Codex MCP server config
-- `.claude/settings.local.json` — Pre-approved permissions
+- `agent1.md` to `agent4.md`, the agent instruction files
+- `COORDINATION.md`, the shared coordination protocol
+- `registry.md`, the project registry
+- `projects/`, per-project work logs
+- `send-to-agent.sh`, message passing between agents
+- `.mcp.json`, Codex MCP server config
+- `.claude/settings.local.json`, pre-approved permissions
 
 ### 2. Authenticate Codex (one-time per team member)
 
@@ -52,69 +52,105 @@ This creates:
 codex login
 ```
 
-### 3. Launch a swarm
+## How to use
+
+The core loop: launch a swarm, give Agent 1 the work, let the agents coordinate, and monitor their work logs. Refresh the swarm when context gets long.
+
+### 1. Launch a swarm
 
 ```bash
 ./launch.sh
 ```
 
-`launch.sh` will prompt you for:
+`launch.sh` walks you through four prompt blocks:
 
-1. **Skip permissions?** — type `y` to pass `--dangerously-skip-permissions` to all agents
-2. **New or resume?** — type `n` to start fresh, or `r` to pick an existing project from a numbered list
-   - If `n`: prompted for a project name. Include the Jira ticket if there is one — e.g. `GBO-123: add-checkout-flow`. The name is normalized into a safe project ID automatically.
+1. **Permissions.** Type `y` to pass `--dangerously-skip-permissions` to all agents.
+2. **Models.** Pick one of three presets:
+   - `1` Orchestrator strong, workers cheaper (the default)
+   - `2` All four strong
+   - `3` All four cheaper
 
-It then opens iTerm2 with 4 panes, starts Claude in each pane with `SWARM_ID` and `AGENT_NUMBER` set, and writes session IDs to `swarms/<N>/pane-config.sh`. After 10 seconds it sends a startup kick to all agents. Agent 1 then runs a comms check — sending a ping to each worker and waiting for all three to confirm before proceeding.
+   The preset then asks for the concrete model(s) it needs. Enter `1`/`2`/`3` to pick from the shortlist (`claude-opus-4-8[1m]`, `claude-sonnet-5`, `claude-haiku-4-5`), press Enter to accept the default, or type any model ID verbatim.
+3. **Effort.** Same three presets (orchestrator high, workers lower / all high / all lower), with values from `xhigh`, `high`, `medium`, `low`. Defaults are `xhigh` for the high tier and `medium` for the lower tier.
+4. **Project.** Type `n` to start fresh (you will be asked for a project name; include the Jira ticket if there is one, e.g. `GBO-123: add-checkout-flow`), or `r` to pick an existing project from a numbered list.
 
-## Swarms
+Pressing Enter through the model and effort prompts gives you the recommended split: Agent 1 on Opus 4.8 (1M) at `xhigh`, workers on Sonnet 5 at `medium`.
 
-Each `./launch.sh` run creates a new **swarm** — an independent group of 4 agents with its own directory:
+The script then opens iTerm2 with 4 panes, starts Claude in each with `SWARM_ID` and `AGENT_NUMBER` exported, writes session IDs to `swarms/<N>/pane-config.sh`, and records the per-agent model/effort choices in `swarms/<N>/launch.env`. After 10 seconds it sends a startup kick to all agents. Agent 1 then runs a comms check, pinging each worker and waiting for all three confirmations before proceeding.
 
-```
-swarms/
-  1/
-    pane-config.sh    # iTerm2 session UUIDs for this swarm's 4 panes
-    ACTIVE_PROJECT    # Current project ID (or empty = new)
-  2/
-    pane-config.sh
-    ACTIVE_PROJECT
-  ...
-```
+### 2. Give Agent 1 the work
 
-Swarm numbers are auto-assigned (next available integer). Multiple swarms can be active simultaneously, each working on a different project.
+1. Give Agent 1 a ticket URL or project description (type it into its pane, or use `send-to-agent.sh`)
+2. Agent 1 breaks down the work and assigns tasks + personas to Agents 2 to 4
+3. Agents signal completion or blockers back to Agent 1
+4. Agent 1 coordinates until the project is complete
 
-`SWARM_ID` is exported as an environment variable in every agent pane. `send-to-agent.sh` reads it automatically — you don't pass it manually.
-
-## Usage
-
-### Sending messages between agents
+### 3. Message agents
 
 ```bash
 ./send-to-agent.sh <agent_number> "<message>"
 ```
 
-`SWARM_ID` must be set in your environment (it is automatically set in each agent pane by `launch.sh`). Short messages (≤500 chars) are typed directly into the target pane. Longer messages are written to `projects/inbox/` and the agent is told to read the file.
+`SWARM_ID` must be set in your environment (it is set automatically in each agent pane by the launch scripts). Short messages (up to 1000 chars) are typed directly into the target pane. Longer messages are written to a temp file and the agent is sent a pointer to read it.
 
 Example:
 ```bash
 ./send-to-agent.sh 2 "Your task: implement the login API. Persona: core/backend-agent/SKILL.md. Work breakdown in projects/auth-v2/index.md."
 ```
 
-### Starting a project
+### 4. Monitor progress
 
-1. Give Agent 1 a ticket URL or project description
-2. Agent 1 breaks down work and assigns tasks + personas to Agents 2–4
-3. Agents signal completion or blockers back to Agent 1
-4. Agent 1 coordinates until the project is complete
-
-### Task status markers
+Do not poll agents with messages. Read their work logs at `projects/{id}/agentN.md`. Look for `[!]` (blocked) first, then `[~]` (in progress).
 
 | Marker | Meaning |
 |--------|---------|
-| `[ ]` | Todo — not started |
+| `[ ]` | Todo, not started |
 | `[~]` | In progress |
 | `[x]` | Done |
-| `[!]` | Blocked — needs Agent 1 |
+| `[!]` | Blocked, needs Agent 1 |
+
+### 5. Refresh a swarm when context gets long
+
+```bash
+./restart-swarm.sh [swarm_id] [flags]
+```
+
+Agents get slow and expensive as their conversations grow. `restart-swarm.sh` checkpoints every agent's working state to its work log (plus a timestamped snapshot under `swarms/<N>/checkpoints/`), then clears each pane and re-primes the agents from their on-disk files. No work is lost.
+
+- Default (soft): sends `/clear` to each pane. Same claude process, empty context.
+- `--hard`: kills and relaunches claude in each pane, replaying the per-agent model/effort from `swarms/<N>/launch.env`. Use it for a crash, a wedged agent, or a model change.
+- `--save-only`: checkpoint and snapshot without clearing anything.
+- `--dry-run`: print every action without touching the panes.
+- `--force`: proceed even if some agents never confirm their checkpoint.
+
+It works both from a plain shell and from inside one of the agent panes (the calling agent's own pane is refreshed last by a detached finisher).
+
+### 6. Open several projects at once
+
+```bash
+./workspace.sh
+```
+
+Scans `projects/` and lets you pick one or more existing projects (or `all`). Each selected project gets its own tab in the frontmost iTerm2 window, with 4 agent panes, a named tab title, and its own swarm ID.
+
+## Swarms
+
+Each `./launch.sh` run (and each tab from `./workspace.sh`) creates a new **swarm**, an independent group of 4 agents with its own directory:
+
+```
+swarms/
+  1/
+    pane-config.sh    # iTerm2 session UUIDs for this swarm's 4 panes
+    ACTIVE_PROJECT    # Current project ID (or empty = new)
+    launch.env        # Per-agent model/effort + flags, replayed by restart-swarm.sh --hard
+    checkpoints/      # Timestamped work-log snapshots from restart-swarm.sh
+  2/
+    ...
+```
+
+Swarm numbers are auto-assigned (next available integer). Multiple swarms can be active simultaneously, each working on a different project.
+
+`SWARM_ID` is exported as an environment variable in every agent pane. `send-to-agent.sh` reads it automatically, you do not pass it manually.
 
 ## File Structure
 
@@ -122,9 +158,11 @@ Example:
 swarms/<N>/
   pane-config.sh          iTerm2 session IDs for this swarm
   ACTIVE_PROJECT          Current project ID for this swarm
+  launch.env              Launch parameters (per-agent model/effort)
+  checkpoints/            Snapshots taken by restart-swarm.sh
 
 projects/
-  inbox/                  Long messages routed via file (auto-created)
+  inbox/                  Legacy message drop-box (ignored by the project pickers)
   {id}/
     index.md              Project overview, work breakdown, decisions
     agent1.md             Agent 1's work log
@@ -132,10 +170,13 @@ projects/
     agent3.md             Agent 3's work log
     agent4.md             Agent 4's work log
 
-agent1.md – agent4.md     Agent instruction files (workspace-level)
+personas/                 Persona library Agent 1 assigns to workers
+agent1.md - agent4.md     Agent instruction files (workspace-level)
 COORDINATION.md           Shared coordination protocol
 registry.md               All projects and their status
 send-to-agent.sh          Message passing script
 launch.sh                 Opens iTerm2 and starts a new swarm
+workspace.sh              Opens one tab per existing project, each a swarm
+restart-swarm.sh          Checkpoint + context refresh (soft /clear or hard relaunch)
 setup.sh                  One-time workspace setup
 ```
