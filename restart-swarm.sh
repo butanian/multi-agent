@@ -11,8 +11,8 @@
 #   soft (default)  Send /clear to each pane. Same process, empty context.
 #   --hard          Actually kill claude (Ctrl-C + /exit) and relaunch a fresh
 #                   instance in each pane. For a crash, a wedged agent, or a
-#                   model change. Replays swarms/N/launch.env (falls back to
-#                   launch.sh defaults).
+#                   model change. Replays swarms/N/launch.env, and refuses
+#                   without it rather than guessing a model.
 #
 # Usage:
 #   ./restart-swarm.sh [swarm_id] [flags]
@@ -27,7 +27,7 @@
 #   --dry-run       Print every action without sending keystrokes. Safe on a
 #                   live swarm.
 #   --skip-perms    (--hard only) relaunch with --dangerously-skip-permissions
-#                   when launch.env is absent.
+#                   even if launch.env recorded otherwise.
 #   --timeout N     Seconds to wait for checkpoint sentinels (default 180).
 #   --self-delay N  Seconds the detached finisher waits before refreshing the
 #                   calling agent's own pane (default 8). In-swarm runs only.
@@ -45,11 +45,6 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CALLER_SWARM="${SWARM_ID:-}"
 CALLER_AGENT_ENV="${AGENT_NUMBER:-}"
 
-# ── Defaults (used by --hard when swarms/N/launch.env is missing) ────────────
-DEFAULT_ORCH_MODEL='claude-fable-5'
-DEFAULT_ORCH_EFFORT='xhigh'
-DEFAULT_WORKER_MODEL='claude-opus-5'
-DEFAULT_WORKER_EFFORT='high'
 DEFAULT_THINK_PROMPT='Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'
 
 # Tunables
@@ -84,6 +79,34 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+# Panes we tried to reach and panes we failed to reach, as space-padded strings.
+# Plain strings, not arrays: this runs under `set -u` on bash 3.2, where
+# expanding an empty array is an error.
+TRIED_PANES=" "
+UNREACHED_PANES=" "
+
+record_send() {
+  local a="$1" ok="$2"
+  case "$TRIED_PANES" in *" $a "*) ;; *) TRIED_PANES="$TRIED_PANES$a " ;; esac
+  [ "$ok" = 0 ] && return 0
+  case "$UNREACHED_PANES" in *" $a "*) ;; *) UNREACHED_PANES="$UNREACHED_PANES$a " ;; esac
+}
+
+# A per-failure warning scrolls past in a long refresh, so every exit path also
+# states the totals. A half-failed refresh must not be skimmable.
+delivery_summary() {
+  local tried unreached
+  tried=$(echo $TRIED_PANES | wc -w | tr -d ' ')
+  unreached=$(echo $UNREACHED_PANES | wc -w | tr -d ' ')
+  if [ "$tried" = 0 ]; then
+    log "  Delivery: no sends attempted."
+  elif [ "$unreached" = 0 ]; then
+    log "  Delivery: all $tried of $tried panes reached."
+  else
+    warn "Delivery: $unreached of $tried panes NOT reached (agents: $(echo $UNREACHED_PANES)). Non-fatal, but those agents got nothing."
+  fi
+}
+
 log()  { printf '%s\n' "$*"; }
 step() { printf '\n── %s\n' "$*"; }
 warn() { printf '  ! %s\n' "$*" >&2; }
@@ -111,6 +134,43 @@ fi
 SWARM_DIR="$SCRIPT_DIR/swarms/$TARGET_SWARM"
 [ -d "$SWARM_DIR" ] || die "No such swarm: $SWARM_DIR"
 [ -f "$SWARM_DIR/pane-config.sh" ] || die "Missing $SWARM_DIR/pane-config.sh (run launch.sh first)."
+
+# Resolved here rather than beside the relaunch they feed, so an unreplayable
+# launch.env is refused before four agents are asked to checkpoint for it.
+if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ]; then
+  if [ ! -f "$SWARM_DIR/launch.env" ]; then
+    printf 'LAUNCH REFUSED: %s\n  assertion: a hard restart replays the parameters the swarm was launched with\n  nothing recorded them, and the launcher must not invent a model\n  Fix: run ./launch.sh to start a swarm, or drop --hard to /clear this one\n' \
+      "$SWARM_DIR/launch.env" >&2
+    exit 1
+  fi
+  MODEL=""; EFFORT=""; THINK_PROMPT="$DEFAULT_THINK_PROMPT"
+  SKIP_PERMS="n"
+  # shellcheck disable=SC1090
+  source "$SWARM_DIR/launch.env"
+  [ "$SKIP_PERMS_FLAG" = 1 ] && SKIP_PERMS="y"
+  PERMS_FLAG=""; [ "$SKIP_PERMS" = "y" ] && PERMS_FLAG="--dangerously-skip-permissions"
+  AGENT_MODELS=(); AGENT_EFFORTS=(); AGENT_ENGINES=()
+  for a in 1 2 3 4; do
+    mvar="MODEL_$a"; evar="EFFORT_$a"
+    AGENT_MODELS[$a]="${!mvar:-${MODEL:-}}"
+    AGENT_EFFORTS[$a]="${!evar:-${EFFORT:-}}"
+    gvar="ENGINE_$a"; AGENT_ENGINES[$a]="${!gvar:-claude}"
+  done
+
+  # Duplicates a check validate_models also makes, deliberately: that one runs after
+  # Phase 1, so leaving it to the shared validator costs four agents a checkpoint for
+  # a restart this script already knows it cannot perform.
+  MISSING=""
+  for a in 1 2 3 4; do
+    [ -n "${AGENT_MODELS[$a]}" ]  || MISSING="$MISSING MODEL_$a"
+    [ -n "${AGENT_EFFORTS[$a]}" ] || MISSING="$MISSING EFFORT_$a"
+  done
+  if [ -n "$MISSING" ]; then
+    printf 'LAUNCH REFUSED: %s\n  assertion: every pane has a recorded model and effort to replay\n  missing:%s\n  an empty value reaches the pane verbatim, starting it on no model at all\n  Fix: add the missing keys, or run ./launch.sh to start a swarm\n' \
+      "$SWARM_DIR/launch.env" "$MISSING" >&2
+    exit 1
+  fi
+fi
 
 # shellcheck disable=SC1090
 source "$SWARM_DIR/pane-config.sh"
@@ -172,6 +232,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & theUuid
 end run
 APPLESCRIPT
 }
@@ -195,6 +256,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & theUuid
 end run
 APPLESCRIPT
 }
@@ -212,7 +274,7 @@ on run argv
   set theUuid to item 1 of argv
   set theFile to item 2 of argv
   set fileRef to open for access (POSIX file theFile)
-  set theText to read fileRef
+  set theText to read fileRef as «class utf8»
   close access fileRef
   tell application "iTerm2"
     repeat with w in windows
@@ -226,6 +288,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & theUuid
 end run
 APPLESCRIPT
 }
@@ -253,8 +316,13 @@ else
     if [ "$DRY_RUN" = 1 ]; then
       log "    [dry-run] would send checkpoint message to Agent $a"
     else
-      SWARM_ID="$TARGET_SWARM" "$SCRIPT_DIR/send-to-agent.sh" "$a" "$msg" >/dev/null
-      log "    checkpoint requested: Agent $a"
+      if SWARM_ID="$TARGET_SWARM" "$SCRIPT_DIR/send-to-agent.sh" "$a" "$msg" >/dev/null; then
+        record_send "$a" 0
+        log "    checkpoint requested: Agent $a"
+      else
+        record_send "$a" 1
+        warn "Agent $a unreachable; no checkpoint requested. Its unflushed state will be lost."
+      fi
     fi
   done
   [ -n "$CALLER_AGENT" ] && log "    Agent $CALLER_AGENT (you) — flush your own work log before this finishes."
@@ -307,67 +375,83 @@ fi
 
 if [ "$SAVE_ONLY" = 1 ]; then
   step "Done (save-only). Swarm left running, context untouched."
+  delivery_summary
   exit 0
-fi
-
-# ── --hard only: build the relaunch commands (mirrors launch.sh) ─────────────
-if [ "$MODE" = "hard" ]; then
-  MODEL=""; EFFORT=""; THINK_PROMPT="$DEFAULT_THINK_PROMPT"
-  SKIP_PERMS="n"; [ "$SKIP_PERMS_FLAG" = 1 ] && SKIP_PERMS="y"
-  if [ -f "$SWARM_DIR/launch.env" ]; then
-    # shellcheck disable=SC1090
-    source "$SWARM_DIR/launch.env"
-  else
-    warn "No launch.env; using launch.sh defaults (orchestrator=$DEFAULT_ORCH_MODEL/$DEFAULT_ORCH_EFFORT workers=$DEFAULT_WORKER_MODEL/$DEFAULT_WORKER_EFFORT skip_perms=$SKIP_PERMS)."
-  fi
-  PERMS_FLAG=""; [ "$SKIP_PERMS" = "y" ] && PERMS_FLAG="--dangerously-skip-permissions"
-  # Per-agent model/effort: MODEL_n/EFFORT_n from launch.env, else the plain
-  # MODEL/EFFORT an old-format launch.env sets, else the per-role defaults above.
-  AGENT_MODELS=(); AGENT_EFFORTS=()
-  for a in 1 2 3 4; do
-    if [ "$a" = 1 ]; then
-      dm="$DEFAULT_ORCH_MODEL"; de="$DEFAULT_ORCH_EFFORT"
-    else
-      dm="$DEFAULT_WORKER_MODEL"; de="$DEFAULT_WORKER_EFFORT"
-    fi
-    mvar="MODEL_$a"; evar="EFFORT_$a"
-    AGENT_MODELS[$a]="${!mvar:-${MODEL:-$dm}}"
-    AGENT_EFFORTS[$a]="${!evar:-${EFFORT:-$de}}"
-  done
 fi
 
 # Full shell line that relaunches a given agent in its pane (--hard).
 launch_line_for() {
-  local a="$1" role="" model effort effort_flag="" effort_label="" claude_cmd
+  local a="$1" role="" model effort effort_label="" claude_cmd
   [ "$a" = 1 ] && role=" — ORCHESTRATOR"
   model="${AGENT_MODELS[$a]}"
   effort="${AGENT_EFFORTS[$a]}"
-  if [ -n "$effort" ]; then
-    effort_flag="--effort $effort"
-    effort_label=" · effort: $effort"
-  fi
-  claude_cmd="claude --model '$model' $effort_flag $PERMS_FLAG --append-system-prompt '$THINK_PROMPT'"
+  [ -n "$effort" ] && effort_label=" · effort: $effort"
+  # Pane 1's prompt comes from the SessionStart hook, which also survives /clear, so the
+  # launcher must not also hand it the workers' thoroughness prompt.
+  local extra
+  if [ "$a" = 1 ]; then extra="$ORCH_TOOL_FLAGS"
+  else extra="--append-system-prompt '$THINK_PROMPT'"; fi
+  claude_cmd=$(engine_cmd "$a" "${AGENT_ENGINES[$a]:-claude}" "$model" "$effort" "$PERMS_FLAG" "$extra") || return 1
   printf "cd '%s' && export SWARM_ID=%s && export AGENT_NUMBER=%s && echo '═══════════════════════════════════════' && echo '  AGENT %s%s  %s%s  (refreshed)' && echo '═══════════════════════════════════════' && %s" \
     "$SCRIPT_DIR" "$TARGET_SWARM" "$a" "$a" "$role" "$model" "$effort_label" "$claude_cmd"
 }
 
 # Refresh one peer pane in place (soft = /clear, hard = exit + relaunch).
+# A pane whose window has closed must be reported, never skipped in silence: this
+# script exists to preserve context across a refresh, and quietly missing a pane loses
+# exactly the thing it was run to keep. Always returns 0 so one dead pane does not
+# abort the refresh of the others; the delivery summary states the totals.
 refresh_peer() {
   local a="$1" uuid; uuid="$(uuid_for "$a")"
-  [ -n "$uuid" ] || { warn "No session id for Agent $a; skipping."; return; }
+  [ -n "$uuid" ] || { warn "No session id for Agent $a; NOT refreshed."; record_send "$a" 1; return 0; }
+  _gone() { warn "Agent $a: pane not found ($1); NOT refreshed, its context is unchanged."; record_send "$a" 1; }
   if [ "$MODE" = "hard" ]; then
     log "    Agent $a: kill + relaunch ..."
-    interrupt_pane "$uuid"; sleep 0.7
-    type_in_pane "$uuid" "/exit"; [ "$DRY_RUN" = 1 ] || sleep 2.5
+    interrupt_pane "$uuid" || { _gone "interrupt"; return 0; }
+    sleep 0.7
+    type_in_pane "$uuid" "/exit" || { _gone "/exit"; return 0; }
+    [ "$DRY_RUN" = 1 ] || sleep 2.5
     local line_file="$TMP_LINES/agent$a.line"
     launch_line_for "$a" > "$line_file"
-    write_line_to_pane "$uuid" "$line_file"
+    write_line_to_pane "$uuid" "$line_file" || { _gone "relaunch line"; return 0; }
   else
     log "    Agent $a: /clear ..."
-    [ "$FORCE" = 1 ] && { interrupt_pane "$uuid"; sleep 0.5; }
-    type_in_pane "$uuid" "/clear"
+    if [ "$FORCE" = 1 ]; then
+      interrupt_pane "$uuid" || { _gone "interrupt"; return 0; }
+      sleep 0.5
+    fi
+    type_in_pane "$uuid" "/clear" || { _gone "/clear"; return 0; }
   fi
+  record_send "$a" 0
+  return 0
 }
+
+# Refuse to start panes whose startup protocol would not load. The hook fails open at
+# runtime, so this is the last point where a broken one can still stop a launch.
+source "$SCRIPT_DIR/tools/launcher-common.sh"
+source "$SCRIPT_DIR/tools/preflight-hook.sh"
+_mv=""; _eng=""; _claude_agents=""
+for _a in 1 2 3 4; do
+  _mv="$_mv
+MODEL_$_a=${AGENT_MODELS[$_a]:-}
+EFFORT_$_a=${AGENT_EFFORTS[$_a]:-}"
+  _eng="$_eng ${AGENT_ENGINES[$_a]:-claude}"
+  case "${AGENT_ENGINES[$_a]:-claude}" in ""|claude) _claude_agents="$_claude_agents $_a" ;; esac
+done
+if [ "$MODE" = "hard" ]; then
+  report_engine_gating "$_eng"
+  if ! validate_models "$_mv" "$_eng"; then
+    exit 1
+  fi
+fi
+if [ -n "${SWARM_SKIP_PREFLIGHT:-}" ]; then
+  echo "  WARNING: SWARM_SKIP_PREFLIGHT is set. Launching WITHOUT verifying the startup hook." >&2
+elif [ -z "$_claude_agents" ]; then
+  echo "  No claude panes in this swarm; skipping the SessionStart hook preflight." >&2
+elif ! preflight_hook "$SCRIPT_DIR/.claude/settings.json" "$SCRIPT_DIR" "$TARGET_SWARM" $_claude_agents; then
+  echo "  Refresh aborted. Set SWARM_SKIP_PREFLIGHT=1 to override deliberately." >&2
+  exit 1
+fi
 
 # ── Phase 3: Refresh panes ───────────────────────────────────────────────────
 step "Phase 3 — refresh ($MODE)"
@@ -405,6 +489,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & u
 end run
 A1
 sleep 2.5
@@ -413,7 +498,7 @@ on run argv
   set u to item 1 of argv
   set f to item 2 of argv
   set fr to open for access (POSIX file f)
-  set txt to read fr
+  set txt to read fr as «class utf8»
   close access fr
   tell application "iTerm2"
     repeat with w in windows
@@ -427,6 +512,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & u
 end run
 A2
 sleep $INIT_WAIT
@@ -449,6 +535,7 @@ on run argv
       end repeat
     end repeat
   end tell
+  error "no live iTerm2 session with unique id " & u
 end run
 A1
 sleep 2
@@ -482,8 +569,19 @@ else
   sleep "$KICK_WAIT"
   for a in 1 2 3 4; do
     [ "$a" = "$CALLER_AGENT" ] && continue
-    SWARM_ID="$TARGET_SWARM" "$SCRIPT_DIR/send-to-agent.sh" "$a" "Execute your startup protocol now." >/dev/null
-    log "    kicked Agent $a"
+    # A relaunched codex pane gets its bootstrap as engine_cmd's positional prompt, so
+    # kicking it here would be a second, racing start.
+    case "${AGENT_ENGINES[$a]:-claude}" in
+      ""|claude) ;;
+      *) log "    Agent $a: ${AGENT_ENGINES[$a]}, bootstrapped at relaunch, no kick sent."; continue ;;
+    esac
+    if SWARM_ID="$TARGET_SWARM" "$SCRIPT_DIR/send-to-agent.sh" "$a" "Execute your startup protocol now." >/dev/null; then
+      record_send "$a" 0
+      log "    kicked Agent $a"
+    else
+      record_send "$a" 1
+      warn "Agent $a unreachable; startup kick not delivered."
+    fi
   done
 fi
 
@@ -491,4 +589,7 @@ fi
 
 step "Done."
 log "  Swarm $TARGET_SWARM refreshed ($MODE). Snapshots kept under swarms/$TARGET_SWARM/checkpoints/."
-[ -n "$CALLER_AGENT" ] && log "  Your own pane (Agent $CALLER_AGENT) refreshes in ~${SELF_DELAY}s via the detached finisher."
+delivery_summary
+if [ -n "$CALLER_AGENT" ]; then
+  log "  Your own pane (Agent $CALLER_AGENT) refreshes in ~${SELF_DELAY}s via the detached finisher."
+fi

@@ -20,6 +20,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Sourced here rather than beside the preflight because the model picker below needs
+# DEFAULT_STRONG_MODEL and DEFAULT_CHEAP_MODEL.
+source "$SCRIPT_DIR/tools/launcher-common.sh"
+
 # ── Swarm number ───────────────────────────────────────────────────────────────
 # Find the next available swarm number by scanning swarms/ for existing dirs
 SWARM_ID=1
@@ -46,26 +50,75 @@ PERMS_FLAG=""
 [[ "$SKIP_PERMS" == "y" ]] && PERMS_FLAG="--dangerously-skip-permissions"
 
 # ── Models ─────────────────────────────────────────────────────────────────────
-MODEL_CHOICES=("claude-fable-5" "claude-opus-5" "claude-sonnet-5" "claude-haiku-4-5")
-DEFAULT_STRONG_MODEL="claude-fable-5"
-DEFAULT_CHEAP_MODEL="claude-opus-5"
+# The menu is the account's entitled list, never a literal. A hardcoded list goes stale
+# silently: it offers models the account cannot run and hides ones it can.
+MODEL_MENU=()
+build_model_menu() {
+  local err list m rc=0
+  if [ -z "${DEFAULT_STRONG_MODEL:-}" ] || [ -z "${DEFAULT_CHEAP_MODEL:-}" ]; then
+    printf 'LAUNCH REFUSED: %s\n  assertion: DEFAULT_STRONG_MODEL and DEFAULT_CHEAP_MODEL are both set\n  one is empty, so panes would start as: claude --model %s\n  Fix: define both in tools/launcher-common.sh\n' \
+      "$SCRIPT_DIR/tools/launcher-common.sh" "''" >&2
+    return 1
+  fi
+  err=$(mktemp)
+  list=$("$SCRIPT_DIR/tools/model-lookup.py" --list-entitled 2>"$err") || rc=$?
+  if [ "$rc" -ne 0 ] || [ -z "${list//[[:space:]]/}" ]; then
+    printf 'LAUNCH REFUSED: %s --list-entitled\n  assertion: the entitled model list is readable\n%s\n  Fix: run it by hand to see why. There is no hardcoded fallback, because a stale list is the defect this replaced.\n' \
+      "$SCRIPT_DIR/tools/model-lookup.py" "$(sed 's/^/  /' "$err")" >&2
+    rm -f "$err"
+    return 1
+  fi
+  rm -f "$err"
+  # rc 0 is not enough on its own. This output becomes the menu verbatim, so anything
+  # that is not a bare id would be offered to the user as a selectable model.
+  if printf '%s\n' "$list" | /usr/bin/grep -qvE '^[A-Za-z0-9._-]+(\[1m\])?$|^$'; then
+    printf 'LAUNCH REFUSED: %s --list-entitled\n  assertion: it prints bare model ids, one per line\n  first offending line: %s\n  Fix: the flag is unimplemented or the output format changed.\n' \
+      "$SCRIPT_DIR/tools/model-lookup.py" \
+      "$(printf '%s\n' "$list" | /usr/bin/grep -m1 -vE '^[A-Za-z0-9._-]+(\[1m\])?$|^$')" >&2
+    return 1
+  fi
+  # Refused rather than omitted: dropping an unentitled default would silently shift
+  # option 1 onto a different model.
+  for m in "$DEFAULT_STRONG_MODEL" "$DEFAULT_CHEAP_MODEL"; do
+    if ! printf '%s\n' "$list" | /usr/bin/grep -qxF "$m"; then
+      printf 'LAUNCH REFUSED: %s\n  assertion: every preset default is entitled for this account\n  %s is not in --list-entitled\n  Fix: change the default, or type the id as free text if you believe the list is wrong.\n' \
+        "$SCRIPT_DIR/tools/launcher-common.sh" "$m" >&2
+      return 1
+    fi
+  done
+  MODEL_MENU=("$DEFAULT_STRONG_MODEL")
+  if [ "$DEFAULT_CHEAP_MODEL" != "$DEFAULT_STRONG_MODEL" ]; then
+    MODEL_MENU+=("$DEFAULT_CHEAP_MODEL")
+  fi
+  while IFS= read -r m; do
+    [ -n "$m" ] || continue
+    case "$m" in "$DEFAULT_STRONG_MODEL"|"$DEFAULT_CHEAP_MODEL") continue ;; esac
+    MODEL_MENU+=("$m")
+  done < <(printf '%s\n' "$list" | sort -u)
+}
 
 # pick_model <label> <default> — prints the chosen model id on stdout.
-# Input: 1-4 selects from MODEL_CHOICES, empty takes the default, anything
-# else is used verbatim as a model id.
 pick_model() {
-  local label="$1" default="$2" raw
+  local label="$1" default="$2" raw i
   echo "  $label model:" >&2
-  echo "    1) ${MODEL_CHOICES[0]}   2) ${MODEL_CHOICES[1]}   3) ${MODEL_CHOICES[2]}   4) ${MODEL_CHOICES[3]}" >&2
+  for i in "${!MODEL_MENU[@]}"; do
+    printf '    %2d) %s\n' "$((i+1))" "${MODEL_MENU[$i]}" >&2
+  done
   echo "    or type a model id" >&2
   read -p "  [default: $default] > " raw
   raw=$(echo "$raw" | tr -d '[:space:]')
-  case "$raw" in
-    "")      echo "$default" ;;
-    1|2|3|4) echo "${MODEL_CHOICES[$((raw-1))]}" ;;
-    *)       echo "$raw" ;;
-  esac
+  if [ -z "$raw" ]; then
+    echo "$default"
+  elif [[ "$raw" =~ ^[0-9]{1,3}$ ]] && [ "$((10#$raw))" -ge 1 ] && [ "$((10#$raw))" -le "${#MODEL_MENU[@]}" ]; then
+    # 10# because $(( )) reads a leading zero as octal while [ -le ] reads it as decimal,
+    # so 010 passed the bounds check and then indexed the 8th entry.
+    echo "${MODEL_MENU[$((10#$raw - 1))]}"
+  else
+    echo "$raw"
+  fi
 }
+
+build_model_menu || exit 1
 
 echo "── Models ────────────────────────────────────────────────────────────────"
 echo "  1) Orchestrator strong, workers cheaper"
@@ -195,10 +248,56 @@ elif [ "$PROJECT_MODE" = "r" ]; then
   echo ""
 fi
 
-CMD1="claude --model '$MODEL_1' --effort $EFFORT_1 $PERMS_FLAG $THINK_FLAG"
-CMD2="claude --model '$MODEL_2' --effort $EFFORT_2 $PERMS_FLAG $THINK_FLAG"
-CMD3="claude --model '$MODEL_3' --effort $EFFORT_3 $PERMS_FLAG $THINK_FLAG"
-CMD4="claude --model '$MODEL_4' --effort $EFFORT_4 $PERMS_FLAG $THINK_FLAG"
+# Each pane's SessionStart hook reads ACTIVE_PROJECT, so it must exist before any pane
+# starts. Writing it after the panes launched made the protocol load a race.
+SWARM_DIR="$SCRIPT_DIR/swarms/$SWARM_ID"
+mkdir -p "$SWARM_DIR"
+printf '%s' "$ACTIVE_PROJECT_VALUE" > "$SWARM_DIR/ACTIVE_PROJECT"
+
+# Refuse to start panes whose startup protocol would not load. The hook fails open at
+# runtime, so this is the last point where a broken one can still stop a launch.
+source "$SCRIPT_DIR/tools/preflight-hook.sh"
+ENGINES_ALL="${ENGINE_1:-claude} ${ENGINE_2:-claude} ${ENGINE_3:-claude} ${ENGINE_4:-claude}"
+CLAUDE_AGENTS=""
+_i=0
+for _e in $ENGINES_ALL; do
+  _i=$((_i+1))
+  case "$_e" in ""|claude) CLAUDE_AGENTS="$CLAUDE_AGENTS $_i" ;; esac
+done
+
+report_engine_gating "$ENGINES_ALL"
+
+if ! validate_models "MODEL_1=$MODEL_1
+EFFORT_1=$EFFORT_1
+MODEL_2=$MODEL_2
+EFFORT_2=$EFFORT_2
+MODEL_3=$MODEL_3
+EFFORT_3=$EFFORT_3
+MODEL_4=$MODEL_4
+EFFORT_4=$EFFORT_4" "$ENGINES_ALL"; then
+  exit 1
+fi
+if [ -n "${SWARM_SKIP_PREFLIGHT:-}" ]; then
+  echo "  WARNING: SWARM_SKIP_PREFLIGHT is set. Launching WITHOUT verifying the startup hook." >&2
+elif [ -z "$CLAUDE_AGENTS" ]; then
+  echo "  No claude panes in this swarm; skipping the SessionStart hook preflight." >&2
+elif ! preflight_hook "$SCRIPT_DIR/.claude/settings.json" "$SCRIPT_DIR" "$SWARM_ID" $CLAUDE_AGENTS; then
+  echo "  Launch aborted. Set SWARM_SKIP_PREFLIGHT=1 to override deliberately." >&2
+  exit 1
+fi
+
+# Per-pane engine. Default claude, so a launch with nothing set behaves exactly as it
+# did before this existed. Setting ENGINE_n=codex builds a Codex pane; no pane is set
+# to codex by this repo.
+ENGINE_1="${ENGINE_1:-claude}"
+ENGINE_2="${ENGINE_2:-claude}"
+ENGINE_3="${ENGINE_3:-claude}"
+ENGINE_4="${ENGINE_4:-claude}"
+
+CMD1=$(engine_cmd 1 "$ENGINE_1" "$MODEL_1" "$EFFORT_1" "$PERMS_FLAG" "$ORCH_TOOL_FLAGS") || exit 1
+CMD2=$(engine_cmd 2 "$ENGINE_2" "$MODEL_2" "$EFFORT_2" "$PERMS_FLAG" "$THINK_FLAG") || exit 1
+CMD3=$(engine_cmd 3 "$ENGINE_3" "$MODEL_3" "$EFFORT_3" "$PERMS_FLAG" "$THINK_FLAG") || exit 1
+CMD4=$(engine_cmd 4 "$ENGINE_4" "$MODEL_4" "$EFFORT_4" "$PERMS_FLAG" "$THINK_FLAG") || exit 1
 
 echo "Launching agent workspace in iTerm2..."
 
@@ -256,9 +355,6 @@ end tell
 IFS=',' read -r ID1 ID2 ID3 ID4 <<< "$SESSION_IDS"
 
 # Write swarms/N/pane-config.sh
-SWARM_DIR="$SCRIPT_DIR/swarms/$SWARM_ID"
-mkdir -p "$SWARM_DIR"
-printf '%s' "$ACTIVE_PROJECT_VALUE" > "$SWARM_DIR/ACTIVE_PROJECT"
 cat > "$SWARM_DIR/pane-config.sh" << EOF
 # iTerm2 pane session IDs — generated by launch.sh on $(date)
 # Swarm $SWARM_ID — Re-run ./launch.sh to regenerate after restarting iTerm2
@@ -279,6 +375,10 @@ EFFORT_1='$EFFORT_1'
 EFFORT_2='$EFFORT_2'
 EFFORT_3='$EFFORT_3'
 EFFORT_4='$EFFORT_4'
+ENGINE_1='$ENGINE_1'
+ENGINE_2='$ENGINE_2'
+ENGINE_3='$ENGINE_3'
+ENGINE_4='$ENGINE_4'
 SKIP_PERMS='$SKIP_PERMS'
 THINK_PROMPT='Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'
 EOF
@@ -299,7 +399,7 @@ echo "  Agent 2:       $ID2  ·  $MODEL_2 · effort $EFFORT_2"
 echo "  Agent 3:       $ID3  ·  $MODEL_3 · effort $EFFORT_3"
 echo "  Agent 4:       $ID4  ·  $MODEL_4 · effort $EFFORT_4"
 echo ""
-echo "Claude is starting in all 4 panes."
+echo "Engines starting: $ENGINES_ALL"
 echo ""
 
 # ── Startup kick ───────────────────────────────────────────────────────────────
@@ -312,10 +412,15 @@ sleep 10
 
 echo "Sending startup kick to all agents..."
 export SWARM_ID
-./send-to-agent.sh 1 "Execute your startup protocol now."
-./send-to-agent.sh 2 "Execute your startup protocol now."
-./send-to-agent.sh 3 "Execute your startup protocol now."
-./send-to-agent.sh 4 "Execute your startup protocol now."
+# A codex pane already received its bootstrap as engine_cmd's positional prompt, so a
+# kick here would be a second, racing start.
+for _a in 1 2 3 4; do
+  _ev="ENGINE_$_a"
+  case "${!_ev:-claude}" in
+    ""|claude) ./send-to-agent.sh "$_a" "Execute your startup protocol now." ;;
+    *) echo "  pane $_a: ${!_ev}, bootstrapped at launch, no kick sent." ;;
+  esac
+done
 
 echo ""
 echo "✓ Startup kicks sent — agents are now executing their protocols."

@@ -31,7 +31,7 @@ The built-in Agent tool is fine for **local research only** (exploring the codeb
 
 On startup, every agent must:
 
-1. **Identify yourself.** Read the banner printed above you in the terminal — it says your agent number.
+1. **Identify yourself.** Your agent number is `$AGENT_NUMBER`. There is no readable banner: the launcher echoes it before `claude` starts, so no agent can see it, and a Codex pane cannot read scrollback either.
 2. **Read your agent file** (`agent1.md` through `agent4.md`) and `COORDINATION.md`.
 3. **Comms check — Agent 1 initiates, workers respond:**
    - **If you are Agent 1:** send a comms check to each worker:
@@ -47,11 +47,37 @@ On startup, every agent must:
      ```
      Do not proceed with your startup protocol until you have sent this reply.
 4. **Once comms are confirmed**, proceed with the rest of your agent-specific startup protocol (reading ACTIVE_PROJECT, loading persona, etc.).
+5. **Never resume prior work on your own. Report it, then wait.**
+
+   *Resuming* means acting on an existing `[ ]` or `[~]` task, an open decision in `index.md`, or a queued item in a `registry.md` row. The comms check, scaffolding a project that does not exist yet, and answering a question Aneesh asked you directly are **not** resuming.
+
+   **Agent 1** produces this, then halts:
+
+   ```
+   RESUME BRIEF - swarm $SWARM_ID
+   Project:  <id from ACTIVE_PROJECT>  [exists / missing]
+   State:    <one line: what the last swarm actually finished>
+   Next:     <the one action you would take if told to go>
+   Blocked:  <decisions waiting on Aneesh, one line each>
+   ```
+
+   **Agents 2, 3, 4** must not touch pre-existing state until `swarms/$SWARM_ID/RESUME_APPROVED` exists. Agent 1 creates it only after Aneesh says go.
+
+   That sentinel is a canary, not a gate. Hooks fail open in every mode, so a missing hook means nobody is told to check it. The launcher preflight is the real gate.
 
 ## Agent roles
 
 - **Agent 1** — Orchestrator: breaks down work, assigns tasks, coordinates. Read `agent1.md`.
 - **Agents 2, 3, 4** — Workers: receive tasks from Agent 1. Read your `agentN.md` file.
+
+## Agent 1 token budget
+
+Agent 1 runs the most expensive model at the highest effort. Its job is to decide the breakdown and delegate, not to execute. In the Agent 1 pane:
+
+- Do not read worker deliverables, source files, or logs in full. Ask the worker for a bounded summary (under 200 words) instead.
+- Do not run research, verification, or implementation that a worker could run. Dispatch it.
+- Keep replies short. Do not re-summarize established context.
+- Read only what is needed to make the next dispatch decision.
 
 ## Writing style
 

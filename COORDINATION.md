@@ -14,8 +14,13 @@ Every task entry in a work log (`projects/{id}/agentN.md`) must use one of these
 | `[~]` | In progress |
 | `[x]` | Done |
 | `[!]` | Blocked — needs Agent 1 |
+| `[-]` | Cancelled — descoped or superseded, never executed |
 
 Keep your work log current. Agent 1 reads these to track parallel progress without interrupting you.
+
+Never close descoped work as `[x]`. A bare `[x]` on work that never ran reads as a completed check to anyone scanning markers, including a future swarm that will build on it. Use `[-]` and say on the same line who cancelled it and why.
+
+There is no marker for work that ran, partly failed, and was accepted anyway. That stays `[x]`, and the rule is that the limitation goes on the same line: what failed, how many times, and what the result therefore does not cover. `[-]` exists because `[x]` on work that never ran is a FALSE claim. An `[x]` with a stated coverage gap is a TRUE claim that is incomplete, and the shape of the gap does not fit in a glyph.
 
 ---
 
