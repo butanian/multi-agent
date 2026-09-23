@@ -101,11 +101,11 @@ for f in launch.sh restart-swarm.sh workspace.sh; do
 done
 
 echo "--- the validator actually rejects a bad value (control) ---"
-printf 'MODEL_1=claude-opus-5\nEFFORT_1=high\n' | python3 tools/model-lookup.py --check - >/dev/null 2>&1 \
+printf 'MODEL_1=claude-opus-5-5\nEFFORT_1=high\n' | python3 tools/model-lookup.py --check - >/dev/null 2>&1 \
   && ok "good model/effort pair accepted" || bad "validator rejected a valid pair"
 printf 'MODEL_1=claude-opus-9\nEFFORT_1=high\n' | python3 tools/model-lookup.py --check - >/dev/null 2>&1 \
   && bad "validator accepted a bogus model id" || ok "bogus model id rejected"
-printf 'MODEL_1=claude-opus-5\nEFFORT_1=ludicrous\n' | python3 tools/model-lookup.py --check - >/dev/null 2>&1 \
+printf 'MODEL_1=claude-opus-5-5\nEFFORT_1=ludicrous\n' | python3 tools/model-lookup.py --check - >/dev/null 2>&1 \
   && bad "validator accepted a bogus effort" || ok "bogus effort rejected (the CLI would have downgraded silently)"
 
 echo "--- the launchers' OWN shipped defaults must pass their own validator ---"

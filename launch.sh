@@ -81,7 +81,7 @@ build_model_menu() {
   # option 1 onto a different model.
   for m in "$DEFAULT_STRONG_MODEL" "$DEFAULT_CHEAP_MODEL"; do
     if ! printf '%s\n' "$list" | /usr/bin/grep -qxF "$m"; then
-      printf 'LAUNCH REFUSED: %s\n  assertion: every preset default is entitled for this account\n  %s is not in --list-entitled\n  Fix: change the default, or type the id as free text if you believe the list is wrong.\n' \
+      printf 'LAUNCH REFUSED: %s\n  assertion: every preset default is entitled for this account\n  %s is not in --list-entitled\n  Fix: edit DEFAULT_STRONG_MODEL and DEFAULT_CHEAP_MODEL in tools/launcher-common.sh\n' \
         "$SCRIPT_DIR/tools/launcher-common.sh" "$m" >&2
       return 1
     fi

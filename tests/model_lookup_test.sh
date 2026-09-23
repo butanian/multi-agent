@@ -52,8 +52,8 @@ check "live claude --help lists exactly the documented set" \
 # MODEL=/EFFORT= is a live fallback and an empty MODEL_n= falls through to it.
 cat > "$FIX/env_quotes.env" <<'ENV'
 # a comment mentioning MODEL_1='bogus-should-be-ignored'
-MODEL_1="claude-opus-5[1m]"
-MODEL_2=claude-opus-5
+MODEL_1="claude-opus-5-5[1m]"
+MODEL_2=claude-opus-5-5
 EFFORT_1='xhigh'
 ENV
 printf 'MODEL_3="claude-sonnet-5"\r\n' >> "$FIX/env_quotes.env"
@@ -349,8 +349,8 @@ out=$(export SWARM_SKIP_PREFLIGHT=1; validate_models "MODEL_1=
 EFFORT_1=high" "$ALL_CLAUDE" 2>&1); rc=$?
 check "SWARM_SKIP_PREFLIGHT no longer skips the empty-value refusal" "1" "$rc"
 
-check "launcher-common defines DEFAULT_STRONG_MODEL for other lanes to source" "claude-fable-5-1" "$DEFAULT_STRONG_MODEL"
-check "launcher-common defines DEFAULT_CHEAP_MODEL for other lanes to source" "claude-opus-5" "$DEFAULT_CHEAP_MODEL"
+check "launcher-common defines DEFAULT_STRONG_MODEL for other lanes to source" "claude-opus-5-5" "$DEFAULT_STRONG_MODEL"
+check "launcher-common defines DEFAULT_CHEAP_MODEL for other lanes to source" "claude-opus-5-5" "$DEFAULT_CHEAP_MODEL"
 
 unset CLAUDE_JSON
 
