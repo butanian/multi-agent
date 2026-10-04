@@ -40,15 +40,6 @@ fi
 # ── Thinking: always level 3 (high) ───────────────────────────────────────────
 THINK_FLAG="--append-system-prompt 'Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'"
 
-# ── Permissions ────────────────────────────────────────────────────────────────
-echo "── Permissions ───────────────────────────────────────────────────────────"
-read -p "  Dangerously skip permissions? [y/N]: " RAW_SKIP_PERMS
-echo "──────────────────────────────────────────────────────────────────────────"
-echo ""
-SKIP_PERMS=$(echo "${RAW_SKIP_PERMS:-n}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-PERMS_FLAG=""
-[[ "$SKIP_PERMS" == "y" ]] && PERMS_FLAG="--dangerously-skip-permissions"
-
 # ── Models ─────────────────────────────────────────────────────────────────────
 # The menu is the account's entitled list, never a literal. A hardcoded list goes stale
 # silently: it offers models the account cannot run and hides ones it can.
@@ -294,10 +285,10 @@ ENGINE_2="${ENGINE_2:-claude}"
 ENGINE_3="${ENGINE_3:-claude}"
 ENGINE_4="${ENGINE_4:-claude}"
 
-CMD1=$(engine_cmd 1 "$ENGINE_1" "$MODEL_1" "$EFFORT_1" "$PERMS_FLAG" "$ORCH_TOOL_FLAGS") || exit 1
-CMD2=$(engine_cmd 2 "$ENGINE_2" "$MODEL_2" "$EFFORT_2" "$PERMS_FLAG" "$THINK_FLAG") || exit 1
-CMD3=$(engine_cmd 3 "$ENGINE_3" "$MODEL_3" "$EFFORT_3" "$PERMS_FLAG" "$THINK_FLAG") || exit 1
-CMD4=$(engine_cmd 4 "$ENGINE_4" "$MODEL_4" "$EFFORT_4" "$PERMS_FLAG" "$THINK_FLAG") || exit 1
+CMD1=$(engine_cmd 1 "$ENGINE_1" "$MODEL_1" "$EFFORT_1" "" "$ORCH_TOOL_FLAGS") || exit 1
+CMD2=$(engine_cmd 2 "$ENGINE_2" "$MODEL_2" "$EFFORT_2" "" "$THINK_FLAG") || exit 1
+CMD3=$(engine_cmd 3 "$ENGINE_3" "$MODEL_3" "$EFFORT_3" "" "$THINK_FLAG") || exit 1
+CMD4=$(engine_cmd 4 "$ENGINE_4" "$MODEL_4" "$EFFORT_4" "" "$THINK_FLAG") || exit 1
 
 echo "Launching agent workspace in iTerm2..."
 
@@ -379,12 +370,8 @@ ENGINE_1='$ENGINE_1'
 ENGINE_2='$ENGINE_2'
 ENGINE_3='$ENGINE_3'
 ENGINE_4='$ENGINE_4'
-SKIP_PERMS='$SKIP_PERMS'
 THINK_PROMPT='Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'
 EOF
-
-PERMS_LABEL="no"
-[[ "$SKIP_PERMS" == "y" ]] && PERMS_LABEL="YES (--dangerously-skip-permissions)"
 
 echo ""
 echo "✓ iTerm2 workspace launched"
@@ -392,7 +379,6 @@ echo "✓ swarms/$SWARM_ID/pane-config.sh written"
 echo ""
 echo "  Swarm:               $SWARM_ID"
 echo "  Active project:      ${ACTIVE_PROJECT_VALUE:-<new — Agent 1 will set>}"
-echo "  Permissions skipped: $PERMS_LABEL"
 echo ""
 echo "  Agent 1 (you): $ID1  ·  $MODEL_1 · effort $EFFORT_1"
 echo "  Agent 2:       $ID2  ·  $MODEL_2 · effort $EFFORT_2"

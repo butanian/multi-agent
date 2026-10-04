@@ -289,16 +289,20 @@ t=$(mksandbox "$REPO/restart-swarm.sh" noenv); run "$t" --save-only
 validation_attempted "$t" "$OUT" && bad "save-only called the model validator" || ok "save-only did not call the model validator"
 rm -rf "$t"
 
-echo "--- --skip-perms still means something now that launch.env is mandatory ---"
-t=$(mksandbox "$REPO/restart-swarm.sh" env n); run "$t" --hard --skip-perms
-case "$OUT" in *--dangerously-skip-permissions*) ok "the flag overrides SKIP_PERMS='n' in launch.env" ;;
-  *) bad "the flag was swallowed by launch.env: $OUT" ;; esac
+echo "--- a legacy SKIP_PERMS='y' in launch.env no longer re-enables the flag ---"
+t=$(mksandbox "$REPO/restart-swarm.sh" env y); run "$t" --hard
+case "$OUT" in *--dangerously-skip-permissions*) bad "legacy SKIP_PERMS='y' still relaunched with the flag: $OUT" ;;
+  *) ok "launch.env's SKIP_PERMS='y' is ignored on a hard restart" ;; esac
 rm -rf "$t"
 
-t=$(mksandbox "$REPO/restart-swarm.sh" env n); run "$t" --hard
-case "$OUT" in *--dangerously-skip-permissions*) bad "skip-perms applied without the flag" ;;
-  *) ok "control: without the flag, launch.env's 'n' is honoured" ;; esac
-rm -rf "$t"
+REG=$(mktemp)
+sed 's|"\$effort" "" "\$extra"|"$effort" "--dangerously-skip-permissions" "$extra"|' "$REPO/restart-swarm.sh" > "$REG"
+cmp -s "$REG" "$REPO/restart-swarm.sh" && bad "could not build the flag-restoring control" || {
+  t=$(mksandbox "$REG" env y); run "$t" --hard
+  case "$OUT" in *--dangerously-skip-permissions*) ok "control: a script that passes the flag is detected" ;;
+    *) bad "control: the flag was passed but not detected, so the check above proves nothing: $OUT" ;; esac
+  rm -rf "$t"; }
+rm -f "$REG"
 
 echo
 echo "  $PASS passed, $FAIL failed"

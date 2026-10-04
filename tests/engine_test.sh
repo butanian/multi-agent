@@ -121,7 +121,7 @@ PS
   sed -i '' "s|\$t/kicks|$t/kicks|" "$t/send-to-agent.sh" 2>/dev/null || true
   chmod +x "$t/bin/osascript" "$t/bin/sleep" "$t/send-to-agent.sh"
   ( cd "$t" && ENGINE_2=codex MODEL_2=gpt-5.6-sol EFFORT_2=xhigh PATH="$t/bin:$PATH" \
-      bash launch.sh >/dev/null 2>&1 <<< $'y\n1\n\n\n1\n\n\nn\nkicktest\n' ) || true
+      bash launch.sh >/dev/null 2>&1 <<< $'1\n\n\n1\n\n\nn\nkicktest\n' ) || true
   tr '\n' ' ' < "$t/kicks" 2>/dev/null
   rm -rf "$t"
 )

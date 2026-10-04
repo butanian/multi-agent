@@ -73,17 +73,6 @@ if [ ${#SELECTED[@]} -eq 0 ]; then
   exit 1
 fi
 
-# ── Permissions ────────────────────────────────────────────────────────────────
-
-echo "── Settings ──────────────────────────────────────────────────────────────"
-read -p "  Dangerously skip permissions? [y/N]: " RAW_SKIP_PERMS
-echo "──────────────────────────────────────────────────────────────────────────"
-echo ""
-
-SKIP_PERMS=$(echo "${RAW_SKIP_PERMS:-n}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
-PERMS_FLAG=""
-[[ "$SKIP_PERMS" == "y" ]] && PERMS_FLAG="--dangerously-skip-permissions"
-
 source "$SCRIPT_DIR/tools/launcher-common.sh"
 
 if [ -z "${DEFAULT_STRONG_MODEL:-}" ] || [ -z "${DEFAULT_CHEAP_MODEL:-}" ]; then
@@ -103,8 +92,8 @@ EFFORT_2=$WORKER_EFFORT"; then
 fi
 
 THINK_FLAG="--append-system-prompt 'Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'"
-CMD_ORCH="claude --model '$ORCH_MODEL' --effort $ORCH_EFFORT $PERMS_FLAG $ORCH_TOOL_FLAGS"
-CMD_WORKER="claude --model '$WORKER_MODEL' --effort $WORKER_EFFORT $PERMS_FLAG $THINK_FLAG"
+CMD_ORCH="claude --model '$ORCH_MODEL' --effort $ORCH_EFFORT $ORCH_TOOL_FLAGS"
+CMD_WORKER="claude --model '$WORKER_MODEL' --effort $WORKER_EFFORT $THINK_FLAG"
 
 # ── Launch tabs ────────────────────────────────────────────────────────────────
 
@@ -197,7 +186,6 @@ EFFORT_1='$ORCH_EFFORT'
 EFFORT_2='$WORKER_EFFORT'
 EFFORT_3='$WORKER_EFFORT'
 EFFORT_4='$WORKER_EFFORT'
-SKIP_PERMS='$SKIP_PERMS'
 THINK_PROMPT='Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'
 EOF
 

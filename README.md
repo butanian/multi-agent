@@ -62,17 +62,16 @@ The core loop: launch a swarm, give Agent 1 the work, let the agents coordinate,
 ./launch.sh
 ```
 
-`launch.sh` walks you through four prompt blocks:
+`launch.sh` walks you through three prompt blocks:
 
-1. **Permissions.** Type `y` to pass `--dangerously-skip-permissions` to all agents.
-2. **Models.** Pick one of three presets:
+1. **Models.** Pick one of three presets:
    - `1` Orchestrator strong, workers cheaper (the default)
    - `2` All four strong
    - `3` All four cheaper
 
    The preset then asks for the concrete model(s) it needs. Enter `1`/`2`/`3` to pick from the shortlist (`claude-opus-4-8[1m]`, `claude-sonnet-5`, `claude-haiku-4-5`), press Enter to accept the default, or type any model ID verbatim.
-3. **Effort.** Same three presets (orchestrator high, workers lower / all high / all lower), with values from `xhigh`, `high`, `medium`, `low`. Defaults are `xhigh` for the high tier and `medium` for the lower tier.
-4. **Project.** Type `n` to start fresh (you will be asked for a project name; include the Jira ticket if there is one, e.g. `GBO-123: add-checkout-flow`), or `r` to pick an existing project from a numbered list.
+2. **Effort.** Same three presets (orchestrator high, workers lower / all high / all lower), with values from `xhigh`, `high`, `medium`, `low`. Defaults are `xhigh` for the high tier and `medium` for the lower tier.
+3. **Project.** Type `n` to start fresh (you will be asked for a project name; include the Jira ticket if there is one, e.g. `GBO-123: add-checkout-flow`), or `r` to pick an existing project from a numbered list.
 
 Pressing Enter through the model and effort prompts gives you the recommended split: Agent 1 on Opus 4.8 (1M) at `xhigh`, workers on Sonnet 5 at `medium`.
 

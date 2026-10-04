@@ -26,8 +26,6 @@
 #                   (you accept that their unflushed state is lost).
 #   --dry-run       Print every action without sending keystrokes. Safe on a
 #                   live swarm.
-#   --skip-perms    (--hard only) relaunch with --dangerously-skip-permissions
-#                   even if launch.env recorded otherwise.
 #   --timeout N     Seconds to wait for checkpoint sentinels (default 180).
 #   --self-delay N  Seconds the detached finisher waits before refreshing the
 #                   calling agent's own pane (default 8). In-swarm runs only.
@@ -60,7 +58,6 @@ MODE="soft"
 SAVE_ONLY=0
 FORCE=0
 DRY_RUN=0
-SKIP_PERMS_FLAG=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -69,7 +66,6 @@ while [ $# -gt 0 ]; do
     --save-only)   SAVE_ONLY=1 ;;
     --force)       FORCE=1 ;;
     --dry-run)     DRY_RUN=1 ;;
-    --skip-perms)  SKIP_PERMS_FLAG=1 ;;
     --timeout)     TIMEOUT="$2"; shift ;;
     --self-delay)  SELF_DELAY="$2"; shift ;;
     -h|--help)     grep '^#' "$0" | sed 's/^# \{0,1\}//' | head -48; exit 0 ;;
@@ -144,11 +140,8 @@ if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ]; then
     exit 1
   fi
   MODEL=""; EFFORT=""; THINK_PROMPT="$DEFAULT_THINK_PROMPT"
-  SKIP_PERMS="n"
   # shellcheck disable=SC1090
   source "$SWARM_DIR/launch.env"
-  [ "$SKIP_PERMS_FLAG" = 1 ] && SKIP_PERMS="y"
-  PERMS_FLAG=""; [ "$SKIP_PERMS" = "y" ] && PERMS_FLAG="--dangerously-skip-permissions"
   AGENT_MODELS=(); AGENT_EFFORTS=(); AGENT_ENGINES=()
   for a in 1 2 3 4; do
     mvar="MODEL_$a"; evar="EFFORT_$a"
@@ -391,7 +384,7 @@ launch_line_for() {
   local extra
   if [ "$a" = 1 ]; then extra="$ORCH_TOOL_FLAGS"
   else extra="--append-system-prompt '$THINK_PROMPT'"; fi
-  claude_cmd=$(engine_cmd "$a" "${AGENT_ENGINES[$a]:-claude}" "$model" "$effort" "$PERMS_FLAG" "$extra") || return 1
+  claude_cmd=$(engine_cmd "$a" "${AGENT_ENGINES[$a]:-claude}" "$model" "$effort" "" "$extra") || return 1
   printf "cd '%s' && export SWARM_ID=%s && export AGENT_NUMBER=%s && echo '═══════════════════════════════════════' && echo '  AGENT %s%s  %s%s  (refreshed)' && echo '═══════════════════════════════════════' && %s" \
     "$SCRIPT_DIR" "$TARGET_SWARM" "$a" "$a" "$role" "$model" "$effort_label" "$claude_cmd"
 }

@@ -87,8 +87,8 @@ EOS
   printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/send-to-agent.sh"
   chmod +x "$tmp/bin/osascript" "$tmp/bin/sleep" "$tmp/send-to-agent.sh" "$tmp/tools/model-lookup.py"
   case "$name" in
-    launch.sh)    stdin="n"$'\n'"1"$'\n'"$pick1"$'\n'"$pick2"$'\n1\n\n\nn\nprobeproj\n' ;;
-    workspace.sh) stdin=$'1\nn\n' ;;
+    launch.sh)    stdin="1"$'\n'"$pick1"$'\n'"$pick2"$'\n1\n\n\nn\nprobeproj\n' ;;
+    workspace.sh) stdin=$'1\n' ;;
   esac
   ( cd "$tmp" && PANE_REC="$tmp/.panes" LIST_FAIL="${LIST_FAIL:-}" PATH="$tmp/bin:$PATH" \
       bash "$name" >"$tmp/.out" 2>"$tmp/.err" <<< "$stdin" )
