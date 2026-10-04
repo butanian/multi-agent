@@ -43,7 +43,7 @@ EOS
   printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/send-to-agent.sh"
   chmod +x "$tmp/bin/osascript" "$tmp/bin/sleep" "$tmp/send-to-agent.sh"
   ( cd "$tmp" && PROBE_ROOT="$tmp" PF_ERR_OUT="$PF_ERR_OUT" PATH="$tmp/bin:$PATH" \
-      bash launch.sh >/dev/null 2>"$PF_ERR_OUT" <<< $'1\n\n\n1\n\n\nn\nprobeproj\n' )
+      bash launch.sh >/dev/null 2>"$PF_ERR_OUT" <<< $'1\n\n\n\nn\nprobeproj\n' )
   local lrc=$?
   if [ -f "$tmp/.probe" ]; then cat "$tmp/.probe"; else echo "NOPANES:rc=$lrc"; fi
   rm -rf "$tmp"
@@ -59,9 +59,10 @@ block = ('SWARM_DIR="$SCRIPT_DIR/swarms/$SWARM_ID"\n'
          'mkdir -p "$SWARM_DIR"\n'
          'printf \'%s\' "$ACTIVE_PROJECT_VALUE" > "$SWARM_DIR/ACTIVE_PROJECT"\n')
 anchor = 'cat > "$SWARM_DIR/pane-config.sh" << EOF'
-if s.count(block) != 1 or s.count(anchor) != 1:
+count_line = 'printf \'%s\' "$AGENT_COUNT" > "$SWARM_DIR/AGENT_COUNT"\n'
+if s.count(block) != 1 or s.count(anchor) != 1 or s.count(count_line) != 1:
     sys.exit("control could not be built: anchors moved")
-s = s.replace(block, '', 1).replace(anchor, block + anchor, 1)
+s = s.replace(block, '', 1).replace(count_line, '', 1).replace(anchor, block + count_line + anchor, 1)
 open(dst, 'w').write(s)
 PY
 }

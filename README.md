@@ -1,8 +1,18 @@
 # multi-agent
 
-A multi-agent Claude Code workspace where 4 coordinated agents run simultaneously in iTerm2 panes. Multiple independent **swarms** can run at the same time, each with its own isolated session state.
+A Claude Code workspace, launched by default as a single agent in one iTerm2 pane. It can also be launched as a 4-agent coordinated swarm (an orchestrator plus 3 workers, each in its own pane) — pick that at the "Launch Mode" prompt in `launch.sh`. Multiple independent **swarms** can run at the same time, each with its own isolated session state.
 
 ## Pane Layout
+
+Default (single agent):
+
+```
+┌─────────────┐
+│  Agent 1    │
+└─────────────┘
+```
+
+Full swarm (opt-in):
 
 ```
 ┌─────────────┬─────────────┐
@@ -62,20 +72,15 @@ The core loop: launch a swarm, give Agent 1 the work, let the agents coordinate,
 ./launch.sh
 ```
 
-`launch.sh` walks you through three prompt blocks:
+`launch.sh` walks you through five prompt blocks:
 
-1. **Models.** Pick one of three presets:
-   - `1` Orchestrator strong, workers cheaper (the default)
-   - `2` All four strong
-   - `3` All four cheaper
+1. **Launch mode.** `1` for a single agent (the default), or `4` for the full orchestrator/worker swarm.
+2. **Engines.** Choose Claude or Codex for each agent. Claude is the default.
+3. **Models.** Choose a model per agent from the active CLI's current catalog. Claude models come from its entitled model list; Codex models come from `codex debug models`. Press Enter for the default or type a model ID.
+4. **Effort.** Single-agent mode asks for one effort level. Swarm mode offers orchestrator high / workers lower, all high, or all lower. Values are `xhigh`, `high`, `medium`, `low`; defaults are `xhigh` and `high`.
+5. **Project.** Type `n` to start fresh (you will be asked for a project name; include the Jira ticket if there is one, e.g. `GBO-123: add-checkout-flow`), or `r` to pick an existing project from a numbered list.
 
-   The preset then asks for the concrete model(s) it needs. Enter `1`/`2`/`3` to pick from the shortlist (`claude-opus-4-8[1m]`, `claude-sonnet-5`, `claude-haiku-4-5`), press Enter to accept the default, or type any model ID verbatim.
-2. **Effort.** Same three presets (orchestrator high, workers lower / all high / all lower), with values from `xhigh`, `high`, `medium`, `low`. Defaults are `xhigh` for the high tier and `medium` for the lower tier.
-3. **Project.** Type `n` to start fresh (you will be asked for a project name; include the Jira ticket if there is one, e.g. `GBO-123: add-checkout-flow`), or `r` to pick an existing project from a numbered list.
-
-Pressing Enter through the model and effort prompts gives you the recommended split: Agent 1 on Opus 4.8 (1M) at `xhigh`, workers on Sonnet 5 at `medium`.
-
-The script then opens iTerm2 with 4 panes, starts Claude in each with `SWARM_ID` and `AGENT_NUMBER` exported, writes session IDs to `swarms/<N>/pane-config.sh`, and records the per-agent model/effort choices in `swarms/<N>/launch.env`. After 10 seconds it sends a startup kick to all agents. Agent 1 then runs a comms check, pinging each worker and waiting for all three confirmations before proceeding.
+The script then opens iTerm2 with the pane(s) for the mode you picked, starts the selected CLI with `SWARM_ID` and `AGENT_NUMBER` exported, writes session IDs to `swarms/<N>/pane-config.sh`, and records the launch mode plus per-agent engine, model, and effort choices in `swarms/<N>/launch.env`. Claude panes receive a startup kick; Codex panes begin from their startup prompt. In swarm mode, Agent 1 runs a comms check, pinging each worker and waiting for confirmations before proceeding; in single-agent mode, it skips the check.
 
 ### 2. Give Agent 1 the work
 
@@ -134,12 +139,12 @@ Scans `projects/` and lets you pick one or more existing projects (or `all`). Ea
 
 ## Swarms
 
-Each `./launch.sh` run (and each tab from `./workspace.sh`) creates a new **swarm**, an independent group of 4 agents with its own directory:
+Each `./launch.sh` run creates a new **swarm** (1 agent by default, or 4 if you pick the full swarm at launch) with its own directory. `./workspace.sh` always opens its tabs as full 4-agent swarms.
 
 ```
 swarms/
   1/
-    pane-config.sh    # iTerm2 session UUIDs for this swarm's 4 panes
+    pane-config.sh    # iTerm2 session UUID(s) for this swarm's pane(s)
     ACTIVE_PROJECT    # Current project ID (or empty = new)
     launch.env        # Per-agent model/effort + flags, replayed by restart-swarm.sh --hard
     checkpoints/      # Timestamped work-log snapshots from restart-swarm.sh

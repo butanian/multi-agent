@@ -35,7 +35,7 @@ engine_cmd() {
       ;;
     codex)
       printf "codex --no-alt-screen -s danger-full-access -a never -m '%s'" "$model"
-      [ -n "$effort" ] && printf " -c 'model_reasoning_effort=\"%s\"'" "$effort"
+      [ -n "$effort" ] && printf " -c model_reasoning_effort=%s" "$effort"
       printf " 'You are Agent %s in this swarm. Read AGENTS.md, then run your startup protocol.'" "$agent"
       ;;
     *)
