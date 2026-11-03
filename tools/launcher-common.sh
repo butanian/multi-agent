@@ -153,8 +153,12 @@ check_bifrost() {
     || refuse "bifrost is not signed in" "$BIFROST_BIN auth login" || return 1
   if [ -n "$need_claude" ]; then
     command -v jq >/dev/null || refuse "jq is required to merge Claude settings for bifrost panes" "install jq" || return 1
+    jq -es 'reduce .[] as $x ({}; . * $x) | .env.ANTHROPIC_BASE_URL' \
+      "$LAUNCHER_ROOT/tools/pane1-settings.json" "$LAUNCHER_ROOT/tools/bifrost-claude-settings.json" >/dev/null 2>&1 \
+      || refuse "the merged Claude settings are unreadable or lose the bifrost base URL" "repair tools/bifrost-claude-settings.json" || return 1
   fi
   if [ -n "$need_codex" ]; then
-    [ -f "$BIFROST_CODEX_PROFILE" ] || refuse "$BIFROST_CODEX_PROFILE is missing" "create the codex bifrost profile from the onboarding steps" || return 1
+    /usr/bin/grep -q 'bifrost.playonshared.co' "$BIFROST_CODEX_PROFILE" 2>/dev/null \
+      || refuse "$BIFROST_CODEX_PROFILE is missing or does not point at the bifrost gateway" "create the codex bifrost profile from the onboarding steps" || return 1
   fi
 }

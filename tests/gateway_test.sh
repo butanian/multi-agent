@@ -50,7 +50,7 @@ if u=$(engine_cmd 2 claude m high "" "" vpn 2>&1); then bad "unknown gateway acc
 else ok "unknown gateway refused"; has "$u" "Fix:" && ok "refusal states a remediation" || bad "no remediation: $u"; fi
 
 echo "--- check_bifrost ---"
-mkdir -p "$TMP/home"; touch "$TMP/home/bifrost.config.toml"
+mkdir -p "$TMP/home"; echo 'base_url = "https://bifrost.playonshared.co/openai/v1"' > "$TMP/home/bifrost.config.toml"
 printf '#!/bin/sh\necho SECRET-TOKEN\nexit 0\n' > "$TMP/good"; printf '#!/bin/sh\necho SECRET-TOKEN\nexit 1\n' > "$TMP/signedout"
 chmod +x "$TMP/good" "$TMP/signedout"
 export BIFROST_CODEX_PROFILE="$TMP/home/bifrost.config.toml"
@@ -62,10 +62,18 @@ has "$out" "SECRET-TOKEN" && bad "token leaked on failure" || ok "token not leak
 BIFROST_BIN="$TMP/nope" check_bifrost "claude" "bifrost" >/dev/null 2>&1 && bad "missing binary accepted" || ok "missing binary refused"
 BIFROST_BIN="$TMP/good" BIFROST_CODEX_PROFILE="$TMP/none.toml" check_bifrost "codex" "bifrost" >/dev/null 2>&1 \
   && bad "missing codex profile accepted" || ok "missing codex profile refused"
+echo 'base_url = "https://api.openai.com"' > "$TMP/home/wrong.toml"
+BIFROST_BIN="$TMP/good" BIFROST_CODEX_PROFILE="$TMP/home/wrong.toml" check_bifrost "codex" "bifrost" >/dev/null 2>&1 \
+  && bad "a codex profile not pointing at bifrost was accepted" || ok "codex profile that does not route to bifrost refused"
 BIFROST_BIN="$TMP/good" BIFROST_CODEX_PROFILE="$TMP/none.toml" check_bifrost "claude" "bifrost" >/dev/null 2>&1 \
   && ok "codex profile not required for claude-only swarm" || bad "claude-only swarm refused over codex profile"
 BIFROST_BIN="$TMP/nope" check_bifrost "claude codex" "direct direct" >/dev/null 2>&1 \
   && ok "all-direct swarm never touches bifrost (control)" || bad "all-direct swarm gated on bifrost"
+
+cp tools/bifrost-claude-settings.json "$TMP/bk.json"; echo '{not json' > tools/bifrost-claude-settings.json
+BIFROST_BIN="$TMP/good" check_bifrost "claude" "bifrost" >/dev/null 2>&1 && bad "corrupt bifrost settings accepted" || ok "corrupt bifrost settings refused"
+cp "$TMP/bk.json" tools/bifrost-claude-settings.json
+BIFROST_BIN="$TMP/good" check_bifrost "claude" "bifrost" >/dev/null 2>&1 && ok "restored settings pass (control)" || bad "restored settings refused"
 
 echo "--- launchers persist and replay GATEWAY_n ---"
 /usr/bin/grep -q "GATEWAY_1='\$GATEWAY_1'" launch.sh && ok "launch.sh records GATEWAY_n in launch.env" || bad "launch.env does not record GATEWAY_n"
