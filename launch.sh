@@ -75,6 +75,15 @@ else
   ENGINE_2=claude ENGINE_3=claude ENGINE_4=claude
 fi
 
+# One question for the whole swarm. launch.env records GATEWAY_n per pane, so a mixed
+# swarm is a one-line edit there.
+read -p "  Route every pane through the Bifrost gateway? [y/N]: " _gw
+case "$(echo "${_gw:-n}" | tr -d '[:space:]')" in
+  [yY]*) GATEWAY_1=bifrost GATEWAY_2=bifrost GATEWAY_3=bifrost GATEWAY_4=bifrost ;;
+  *)     GATEWAY_1=direct  GATEWAY_2=direct  GATEWAY_3=direct  GATEWAY_4=direct ;;
+esac
+[ "$AGENT_COUNT" = "4" ] || { GATEWAY_2=direct GATEWAY_3=direct GATEWAY_4=direct; }
+
 # ── Models ─────────────────────────────────────────────────────────────────────
 MODEL_MENU=()
 build_model_menu() {
@@ -301,6 +310,7 @@ for _e in $ENGINES_ALL; do
 done
 
 report_engine_gating "$ENGINES_ALL"
+check_bifrost "$ENGINES_ALL" "$GATEWAY_1 $GATEWAY_2 $GATEWAY_3 $GATEWAY_4" || exit 1
 
 if ! validate_models "MODEL_1=$MODEL_1
 EFFORT_1=$EFFORT_1
@@ -324,10 +334,10 @@ fi
 # Per-pane engine. Default claude, so a launch with nothing set behaves exactly as it
 # did before this existed. Setting ENGINE_n=codex builds a Codex pane; no pane is set
 # to codex by this repo.
-CMD1=$(engine_cmd 1 "$ENGINE_1" "$MODEL_1" "$EFFORT_1" "" "$ORCH_TOOL_FLAGS") || exit 1
-CMD2=$(engine_cmd 2 "$ENGINE_2" "$MODEL_2" "$EFFORT_2" "" "$THINK_FLAG") || exit 1
-CMD3=$(engine_cmd 3 "$ENGINE_3" "$MODEL_3" "$EFFORT_3" "" "$THINK_FLAG") || exit 1
-CMD4=$(engine_cmd 4 "$ENGINE_4" "$MODEL_4" "$EFFORT_4" "" "$THINK_FLAG") || exit 1
+CMD1=$(engine_cmd 1 "$ENGINE_1" "$MODEL_1" "$EFFORT_1" "" "$ORCH_TOOL_FLAGS" "$GATEWAY_1") || exit 1
+CMD2=$(engine_cmd 2 "$ENGINE_2" "$MODEL_2" "$EFFORT_2" "" "$THINK_FLAG" "$GATEWAY_2") || exit 1
+CMD3=$(engine_cmd 3 "$ENGINE_3" "$MODEL_3" "$EFFORT_3" "" "$THINK_FLAG" "$GATEWAY_3") || exit 1
+CMD4=$(engine_cmd 4 "$ENGINE_4" "$MODEL_4" "$EFFORT_4" "" "$THINK_FLAG" "$GATEWAY_4") || exit 1
 
 echo "Launching agent workspace in iTerm2..."
 
@@ -431,6 +441,10 @@ ENGINE_1='$ENGINE_1'
 ENGINE_2='$ENGINE_2'
 ENGINE_3='$ENGINE_3'
 ENGINE_4='$ENGINE_4'
+GATEWAY_1='$GATEWAY_1'
+GATEWAY_2='$GATEWAY_2'
+GATEWAY_3='$GATEWAY_3'
+GATEWAY_4='$GATEWAY_4'
 THINK_PROMPT='Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'
 EOF
 

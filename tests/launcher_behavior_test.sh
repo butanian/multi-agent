@@ -43,7 +43,7 @@ EOS
   printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/send-to-agent.sh"
   chmod +x "$tmp/bin/osascript" "$tmp/bin/sleep" "$tmp/send-to-agent.sh"
   ( cd "$tmp" && PROBE_ROOT="$tmp" PF_ERR_OUT="$PF_ERR_OUT" PATH="$tmp/bin:$PATH" \
-      bash launch.sh >/dev/null 2>"$PF_ERR_OUT" <<< $'1\n\n\n\nn\nprobeproj\n' )
+      bash launch.sh >/dev/null 2>"$PF_ERR_OUT" <<< $'1\n\n\n\n\nn\nprobeproj\n' )
   local lrc=$?
   if [ -f "$tmp/.probe" ]; then cat "$tmp/.probe"; else echo "NOPANES:rc=$lrc"; fi
   rm -rf "$tmp"

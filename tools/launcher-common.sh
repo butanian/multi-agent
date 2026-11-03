@@ -15,7 +15,10 @@ DEFAULT_CHEAP_MODEL="claude-opus-5-5"
 # malformed settings file silently disables every deny rule.
 ORCH_TOOL_FLAGS="--tools Read,Write,Edit,Bash,Skill --strict-mcp-config --settings $LAUNCHER_ROOT/tools/pane1-settings.json"
 
-# engine_cmd <agent> <engine> <model> <effort> <perms_flag> <extra_flags>
+BIFROST_BIN="${BIFROST_BIN:-$HOME/.bifrost/bin/bifrost}"
+BIFROST_CODEX_PROFILE="${BIFROST_CODEX_PROFILE:-$HOME/.codex/bifrost.config.toml}"
+
+# engine_cmd <agent> <engine> <model> <effort> <perms_flag> <extra_flags> [gateway]
 # Prints the command that starts one pane. Default engine is claude, and the claude
 # branch reproduces exactly what the launchers built before this existed.
 #
@@ -25,16 +28,32 @@ ORCH_TOOL_FLAGS="--tools Read,Write,Edit,Bash,Skill --strict-mcp-config --settin
 # pane also cannot read the launcher's banner from scrollback, so its identity is baked
 # into the bootstrap prompt as well as exported in AGENT_NUMBER.
 engine_cmd() {
-  local agent=$1 engine=${2:-claude} model=$3 effort=$4 perms=${5:-} extra=${6:-}
-  local effort_flag=""
+  local agent=$1 engine=${2:-claude} model=$3 effort=$4 perms=${5:-} extra=${6:-} gateway=${7:-direct}
+  local effort_flag="" gw_flags="" gw_profile="" files
+  case "$gateway" in
+    ""|direct) ;;
+    bifrost)
+      gw_profile=" -p bifrost"
+      # A repeated --settings replaces the earlier one (measured, Claude Code 2.1.316), so
+      # pane 1 gets one merged argument that carries its own file too.
+      files="$LAUNCHER_ROOT/tools/bifrost-claude-settings.json"
+      [ "$agent" = 1 ] && files="$LAUNCHER_ROOT/tools/pane1-settings.json $files"
+      gw_flags=" --settings \"\$(jq -s 'reduce .[] as \$x ({}; . * \$x)' $files)\""
+      ;;
+    *)
+      printf 'LAUNCH REFUSED: unknown gateway %s for agent %s\n  Fix: set GATEWAY_%s to direct or bifrost\n' \
+        "$gateway" "$agent" "$agent" >&2
+      return 1
+      ;;
+  esac
   case "$engine" in
     ""|claude)
       [ -n "$effort" ] && effort_flag="--effort $effort"
-      printf "claude --model '%s'%s%s%s" "$model" \
-        "${effort_flag:+ $effort_flag}" "${perms:+ $perms}" "${extra:+ $extra}"
+      printf "claude --model '%s'%s%s%s%s" "$model" \
+        "${effort_flag:+ $effort_flag}" "${perms:+ $perms}" "${extra:+ $extra}" "$gw_flags"
       ;;
     codex)
-      printf "codex --no-alt-screen -s danger-full-access -a never -m '%s'" "$model"
+      printf "codex --no-alt-screen -s danger-full-access -a never%s -m '%s'" "$gw_profile" "$model"
       [ -n "$effort" ] && printf " -c model_reasoning_effort=%s" "$effort"
       printf " 'You are Agent %s in this swarm. Read AGENTS.md, then run your startup protocol.'" "$agent"
       ;;
@@ -115,4 +134,27 @@ validate_models() {
     return 1
   fi
   return 0
+}
+
+# check_bifrost "<engine per pane>" "<gateway per pane>"
+# Refuses before any pane starts, and before restart-swarm.sh checkpoints, when a pane
+# routed through Bifrost could not authenticate. print-token is the same call the panes
+# make, and its output is discarded so a token never reaches a terminal or log.
+check_bifrost() {
+  local engines=($1) gateways=($2) i need_claude="" need_codex="" refuse
+  refuse() { printf 'LAUNCH REFUSED: %s\n  Fix: %s\n' "$1" "$2" >&2; return 1; }
+  for i in "${!gateways[@]}"; do
+    [ "${gateways[$i]}" = bifrost ] || continue
+    case "${engines[$i]:-claude}" in codex) need_codex=1 ;; *) need_claude=1 ;; esac
+  done
+  [ -n "$need_claude$need_codex" ] || return 0
+  [ -x "$BIFROST_BIN" ] || refuse "$BIFROST_BIN is not installed" "npx -y @maximhq/bifrost-cli  and see the onboarding steps, or set GATEWAY_n=direct" || return 1
+  "$BIFROST_BIN" --context playon auth print-token >/dev/null 2>&1 \
+    || refuse "bifrost is not signed in" "$BIFROST_BIN auth login" || return 1
+  if [ -n "$need_claude" ]; then
+    command -v jq >/dev/null || refuse "jq is required to merge Claude settings for bifrost panes" "install jq" || return 1
+  fi
+  if [ -n "$need_codex" ]; then
+    [ -f "$BIFROST_CODEX_PROFILE" ] || refuse "$BIFROST_CODEX_PROFILE is missing" "create the codex bifrost profile from the onboarding steps" || return 1
+  fi
 }

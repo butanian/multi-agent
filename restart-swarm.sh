@@ -38,6 +38,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/tools/launcher-common.sh"
 
 # Capture the *calling* environment before we reassign SWARM_ID for child calls.
 CALLER_SWARM="${SWARM_ID:-}"
@@ -142,13 +143,15 @@ if [ "$MODE" = "hard" ] && [ "$SAVE_ONLY" = 0 ]; then
   MODEL=""; EFFORT=""; THINK_PROMPT="$DEFAULT_THINK_PROMPT"
   # shellcheck disable=SC1090
   source "$SWARM_DIR/launch.env"
-  AGENT_MODELS=(); AGENT_EFFORTS=(); AGENT_ENGINES=()
+  AGENT_MODELS=(); AGENT_EFFORTS=(); AGENT_ENGINES=(); AGENT_GATEWAYS=()
   for a in 1 2 3 4; do
     mvar="MODEL_$a"; evar="EFFORT_$a"
     AGENT_MODELS[$a]="${!mvar:-${MODEL:-}}"
     AGENT_EFFORTS[$a]="${!evar:-${EFFORT:-}}"
     gvar="ENGINE_$a"; AGENT_ENGINES[$a]="${!gvar:-claude}"
+    wvar="GATEWAY_$a"; AGENT_GATEWAYS[$a]="${!wvar:-direct}"
   done
+  check_bifrost "${AGENT_ENGINES[*]:1}" "${AGENT_GATEWAYS[*]:1}" || exit 1
 
   # Duplicates a check validate_models also makes, deliberately: that one runs after
   # Phase 1, so leaving it to the shared validator costs four agents a checkpoint for
@@ -384,7 +387,7 @@ launch_line_for() {
   local extra
   if [ "$a" = 1 ]; then extra="$ORCH_TOOL_FLAGS"
   else extra="--append-system-prompt '$THINK_PROMPT'"; fi
-  claude_cmd=$(engine_cmd "$a" "${AGENT_ENGINES[$a]:-claude}" "$model" "$effort" "" "$extra") || return 1
+  claude_cmd=$(engine_cmd "$a" "${AGENT_ENGINES[$a]:-claude}" "$model" "$effort" "" "$extra" "${AGENT_GATEWAYS[$a]:-direct}") || return 1
   printf "cd '%s' && export SWARM_ID=%s && export AGENT_NUMBER=%s && echo '═══════════════════════════════════════' && echo '  AGENT %s%s  %s%s  (refreshed)' && echo '═══════════════════════════════════════' && %s" \
     "$SCRIPT_DIR" "$TARGET_SWARM" "$a" "$a" "$role" "$model" "$effort_label" "$claude_cmd"
 }
@@ -421,7 +424,6 @@ refresh_peer() {
 
 # Refuse to start panes whose startup protocol would not load. The hook fails open at
 # runtime, so this is the last point where a broken one can still stop a launch.
-source "$SCRIPT_DIR/tools/launcher-common.sh"
 source "$SCRIPT_DIR/tools/preflight-hook.sh"
 _mv=""; _eng=""; _claude_agents=""
 for _a in 1 2 3 4; do
