@@ -75,14 +75,15 @@ else
   ENGINE_2=claude ENGINE_3=claude ENGINE_4=claude
 fi
 
-# One question for the whole swarm. launch.env records GATEWAY_n per pane, so a mixed
-# swarm is a one-line edit there.
-read -p "  Route every pane through the Bifrost gateway? [y/N]: " _gw
-case "$(echo "${_gw:-n}" | tr -d '[:space:]')" in
-  [yY]*) GATEWAY_1=bifrost GATEWAY_2=bifrost GATEWAY_3=bifrost GATEWAY_4=bifrost ;;
-  *)     GATEWAY_1=direct  GATEWAY_2=direct  GATEWAY_3=direct  GATEWAY_4=direct ;;
+# One question. Answer "all", blank for none, or pane numbers such as "2 4". launch.env
+# records GATEWAY_n per pane, so a later edit there changes one pane.
+read -p "  Panes to route through the Bifrost gateway [all / numbers like '2 4' / blank = none]: " _gw
+GATEWAY_1=direct GATEWAY_2=direct GATEWAY_3=direct GATEWAY_4=direct
+case "$(echo "${_gw:-}" | tr 'A-Z' 'a-z')" in
+  *all*) GATEWAY_1=bifrost GATEWAY_2=bifrost GATEWAY_3=bifrost GATEWAY_4=bifrost ;;
+  *) for _n in $_gw; do case "$_n" in [1-4]) printf -v "GATEWAY_$_n" bifrost ;; esac; done ;;
 esac
-[ "$AGENT_COUNT" = "4" ] || { GATEWAY_2=direct GATEWAY_3=direct GATEWAY_4=direct; }
+[ "$AGENT_COUNT" = "4" ] || GATEWAY_2=direct GATEWAY_3=direct GATEWAY_4=direct
 
 # ── Models ─────────────────────────────────────────────────────────────────────
 MODEL_MENU=()
