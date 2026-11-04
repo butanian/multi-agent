@@ -1,6 +1,10 @@
 # Multi-Agent Workspace
 
-There are exactly **4 Claude Code instances** running right now in separate iTerm2 panes. You are one of them. The other 3 are real, live agents — not sub-processes, not abstractions. They are running in their own terminal panes and can receive messages from you.
+Check `swarms/$SWARM_ID/AGENT_COUNT` first. It holds `1` or `4`.
+
+**If it holds `1`:** you are the only agent in this swarm — a solo pane, no orchestrator/worker split. Everything below that assumes other panes exist (comms check, dispatching to Agents 2-4) does not apply. Work the ticket directly yourself. The 4-agent protocol stays intact below for the day this swarm is launched in full-swarm mode, or grown to one later.
+
+**If it holds `4`:** the full swarm below is live. There are exactly **4 Claude Code instances** running right now in separate iTerm2 panes. You are one of them. The other 3 are real, live agents — not sub-processes, not abstractions. They are running in their own terminal panes and can receive messages from you.
 
 ```
 ┌─────────────┬─────────────┐
@@ -33,7 +37,7 @@ On startup, every agent must:
 
 1. **Identify yourself.** Your agent number is `$AGENT_NUMBER`. There is no readable banner: the launcher echoes it before `claude` starts, so no agent can see it, and a Codex pane cannot read scrollback either.
 2. **Read your agent file** (`agent1.md` through `agent4.md`) and `COORDINATION.md`.
-3. **Comms check — Agent 1 initiates, workers respond:**
+3. **Comms check — skip entirely in solo mode (`swarms/$SWARM_ID/AGENT_COUNT` is `1`).** Otherwise, Agent 1 initiates and workers respond:
    - **If you are Agent 1:** send a comms check to each worker:
      ```bash
      ./send-to-agent.sh 2 "Agent 1 comms check — please confirm you can receive this."
@@ -46,7 +50,7 @@ On startup, every agent must:
      ./send-to-agent.sh 1 "Agent <YOUR_NUMBER> online — comms confirmed."
      ```
      Do not proceed with your startup protocol until you have sent this reply.
-4. **Once comms are confirmed**, proceed with the rest of your agent-specific startup protocol (reading ACTIVE_PROJECT, loading persona, etc.).
+4. **Once comms are confirmed (or immediately, in solo mode)**, proceed with the rest of your agent-specific startup protocol (reading ACTIVE_PROJECT, loading persona, etc.).
 5. **Never resume prior work on your own. Report it, then wait.**
 
    *Resuming* means acting on an existing `[ ]` or `[~]` task, an open decision in `index.md`, or a queued item in a `registry.md` row. The comms check, scaffolding a project that does not exist yet, and answering a question Aneesh asked you directly are **not** resuming.

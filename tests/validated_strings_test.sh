@@ -47,7 +47,7 @@ EOS
   chmod +x "$tmp/bin/osascript" "$tmp/bin/sleep" "$tmp/send-to-agent.sh"
 
   case "$name" in
-    launch.sh)    stdin=$'n\n1\n\n\n1\n\n\nn\nprobeproj\n' ;;
+    launch.sh)    stdin=$'n\n1\n\n\n\n1\n\n\nn\nprobeproj\n' ;;
     workspace.sh) stdin=$'1\nn\n' ;;
   esac
   ( cd "$tmp" && VM_REC="$tmp/.validated" PANE_REC="$tmp/.panes" PATH="$tmp/bin:$PATH" \

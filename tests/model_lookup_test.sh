@@ -349,8 +349,8 @@ out=$(export SWARM_SKIP_PREFLIGHT=1; validate_models "MODEL_1=
 EFFORT_1=high" "$ALL_CLAUDE" 2>&1); rc=$?
 check "SWARM_SKIP_PREFLIGHT no longer skips the empty-value refusal" "1" "$rc"
 
-check "launcher-common defines DEFAULT_STRONG_MODEL for other lanes to source" "claude-fable-5-1" "$DEFAULT_STRONG_MODEL"
-check "launcher-common defines DEFAULT_CHEAP_MODEL for other lanes to source" "claude-opus-5" "$DEFAULT_CHEAP_MODEL"
+check "launcher-common defines DEFAULT_STRONG_MODEL for other lanes to source" "claude-opus-5-5" "$DEFAULT_STRONG_MODEL"
+check "launcher-common defines DEFAULT_CHEAP_MODEL for other lanes to source" "claude-opus-5-5" "$DEFAULT_CHEAP_MODEL"
 
 unset CLAUDE_JSON
 

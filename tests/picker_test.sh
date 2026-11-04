@@ -42,8 +42,8 @@ fi
 
 
 STUB_LIST=$'claude-opus-5\nclaude-haiku-4-5-20251001\nclaude-fable-5-1\nclaude-sonnet-5\nclaude-opus-5'
-# Defaults first, then the rest sorted and deduplicated:
-#   1 claude-fable-5-1  2 claude-opus-5  3 claude-haiku-4-5-20251001  4 claude-sonnet-5
+# The strong default first, then the rest sorted and deduplicated:
+#   1 claude-fable-5-1  2 claude-haiku-4-5-20251001  3 claude-opus-5  4 claude-sonnet-5
 # The old hardcoded array put sonnet at 3, so picking 3 tells the two apart.
 WIDE_LIST=$'m-a\nm-b\nm-c\nm-d\nm-e\nm-f\nm-g\nm-h\nm-i\nclaude-fable-5-1\nclaude-opus-5'
 
@@ -87,8 +87,8 @@ EOS
   printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/send-to-agent.sh"
   chmod +x "$tmp/bin/osascript" "$tmp/bin/sleep" "$tmp/send-to-agent.sh" "$tmp/tools/model-lookup.py"
   case "$name" in
-    launch.sh)    stdin="n"$'\n'"1"$'\n'"$pick1"$'\n'"$pick2"$'\n1\n\n\nn\nprobeproj\n' ;;
-    workspace.sh) stdin=$'1\nn\n' ;;
+    launch.sh)    stdin=$'4\n\n\n\n\n\n'"$pick1"$'\n'"$pick2"$'\n\n\n1\n\n\nn\nprobeproj\n' ;;
+    workspace.sh) stdin=$'1\n' ;;
   esac
   ( cd "$tmp" && PANE_REC="$tmp/.panes" LIST_FAIL="${LIST_FAIL:-}" PATH="$tmp/bin:$PATH" \
       bash "$name" >"$tmp/.out" 2>"$tmp/.err" <<< "$stdin" )
@@ -99,13 +99,13 @@ refused()    { [ ! -s "$1/.panes" ] && /usr/bin/grep -q 'LAUNCH REFUSED' "$1/.er
 
 echo "--- the menu is the entitled list, ordered defaults-first then sorted ---"
 T=$(run_launcher launch.sh 3 2)
-menu=$(/usr/bin/grep -oE '^ +[0-9]+\) .+' "$T/.err" | head -8)
+menu=$(/usr/bin/grep -oE '^ +[0-9]+\) .+' "$T/.err" | /usr/bin/grep -v 'Codex' | head -8)
 if [ -z "$menu" ]; then bad "no menu was printed"; else
   for i in 1 2 3 4; do
     case $i in
       1) want=claude-fable-5-1 ; why="DEFAULT_STRONG_MODEL" ;;
-      2) want=claude-opus-5 ; why="DEFAULT_CHEAP_MODEL" ;;
-      3) want=claude-haiku-4-5-20251001 ; why="first remaining id in sort order" ;;
+      2) want=claude-haiku-4-5-20251001 ; why="first remaining id in sort order" ;;
+      3) want=claude-opus-5 ; why="second remaining id in sort order" ;;
       4) want=claude-sonnet-5 ; why="last remaining id" ;;
     esac
     got=$(printf '%s\n' "$menu" | sed -n "s/^ *$i) *//p" | head -1)
@@ -114,10 +114,10 @@ if [ -z "$menu" ]; then bad "no menu was printed"; else
   [ -z "$(printf '%s\n' "$menu" | sed -n 's/^ *5) *//p')" ] && ok "the duplicate id was not offered twice" \
     || bad "the list was not deduplicated"
 fi
-[ "$(pane_model "$T" 1)" = claude-haiku-4-5-20251001 ] \
+[ "$(pane_model "$T" 1)" = claude-opus-5 ] \
   && ok "picking 3 launches the 3rd menu entry, not the 3rd hardcoded id" \
   || bad "picking 3 launched '$(pane_model "$T" 1)'"
-[ "$(pane_model "$T" 2)" = claude-opus-5 ] && ok "picking 2 launches the 2nd menu entry" \
+[ "$(pane_model "$T" 2)" = claude-haiku-4-5-20251001 ] && ok "picking 2 launches the 2nd menu entry" \
   || bad "picking 2 launched '$(pane_model "$T" 2)'"
 rm -rf "$T"
 

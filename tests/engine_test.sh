@@ -51,7 +51,7 @@ for f in launch.sh restart-swarm.sh; do
 done
 
 echo "--- ENGINE_N defaults to claude and is persisted ---"
-/usr/bin/grep -qE 'ENGINE_1=\$\{ENGINE_1:-claude\}|ENGINE_1="\$\{ENGINE_1:-claude\}"' launch.sh \
+/usr/bin/grep -qF 'echo "${raw:-1}"' launch.sh && /usr/bin/grep -qF 'ENGINE_1=$(pick_engine 1)' launch.sh \
   && ok "launch.sh defaults ENGINE_1 to claude" || bad "launch.sh does not default ENGINE_1 to claude"
 /usr/bin/grep -q "ENGINE_1=" launch.sh && ok "launch.sh records ENGINE_1 for restart" || bad "ENGINE_1 not persisted"
 
@@ -120,8 +120,8 @@ PS
   printf '#!/usr/bin/env bash\necho "$1" >> "$t/kicks"\nexit 0\n' > "$t/send-to-agent.sh"
   sed -i '' "s|\$t/kicks|$t/kicks|" "$t/send-to-agent.sh" 2>/dev/null || true
   chmod +x "$t/bin/osascript" "$t/bin/sleep" "$t/send-to-agent.sh"
-  ( cd "$t" && ENGINE_2=codex MODEL_2=gpt-5.6-sol EFFORT_2=xhigh PATH="$t/bin:$PATH" \
-      bash launch.sh >/dev/null 2>&1 <<< $'y\n1\n\n\n1\n\n\nn\nkicktest\n' ) || true
+  ( cd "$t" && PATH="$t/bin:$PATH" \
+      bash launch.sh >/dev/null 2>&1 <<< $'4\n\n2\n\n\n\n\n\n\n1\n\n\nn\nkicktest\n' ) || true
   tr '\n' ' ' < "$t/kicks" 2>/dev/null
   rm -rf "$t"
 )

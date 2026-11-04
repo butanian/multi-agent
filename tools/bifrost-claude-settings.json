@@ -1,0 +1,7 @@
+{
+  "apiKeyHelper": "$HOME/.bifrost/bin/bifrost --context playon auth print-token",
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://bifrost.playonshared.co/anthropic",
+    "CLAUDE_CODE_API_KEY_HELPER_TTL_MS": "900000"
+  }
+}
