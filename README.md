@@ -32,6 +32,7 @@ Full swarm (opt-in):
 - macOS with iTerm2 installed
 - Claude Code CLI (`claude`) installed and authenticated
 - Node.js/npm (for the Codex CLI, used by the `/codex-collab` skill)
+- Optional, to route panes through the Bifrost gateway: the Bifrost CLI, `jq`, Codex CLI 0.165 or newer, and the setup in [Bifrost gateway](#bifrost-gateway)
 
 ## Setup
 
@@ -72,15 +73,16 @@ The core loop: launch a swarm, give Agent 1 the work, let the agents coordinate,
 ./launch.sh
 ```
 
-`launch.sh` walks you through five prompt blocks:
+`launch.sh` walks you through six prompt blocks:
 
 1. **Launch mode.** `1` for a single agent (the default), or `4` for the full orchestrator/worker swarm.
 2. **Engines.** Choose Claude or Codex for each agent. Claude is the default.
-3. **Models.** Choose a model per agent from the active CLI's current catalog. Claude models come from its entitled model list; Codex models come from `codex debug models`. Press Enter for the default or type a model ID.
-4. **Effort.** Single-agent mode asks for one effort level. Swarm mode offers orchestrator high / workers lower, all high, or all lower. Values are `xhigh`, `high`, `medium`, `low`; defaults are `xhigh` and `high`.
-5. **Project.** Type `n` to start fresh (you will be asked for a project name; include the Jira ticket if there is one, e.g. `GBO-123: add-checkout-flow`), or `r` to pick an existing project from a numbered list.
+3. **Gateway.** Choose which panes go through Bifrost: `all`, pane numbers such as `2 4`, or blank for none (direct from Anthropic or OpenAI).
+4. **Models.** Choose a model per agent from the active CLI's current catalog. Claude models come from its entitled model list; Codex models come from `codex debug models`. Press Enter for the default or type a model ID.
+5. **Effort.** Single-agent mode asks for one effort level. Swarm mode offers orchestrator high / workers lower, all high, or all lower. Values are `xhigh`, `high`, `medium`, `low`; defaults are `xhigh` and `high`.
+6. **Project.** Type `n` to start fresh (you will be asked for a project name; include the Jira ticket if there is one, e.g. `GBO-123: add-checkout-flow`), or `r` to pick an existing project from a numbered list.
 
-The script then opens iTerm2 with the pane(s) for the mode you picked, starts the selected CLI with `SWARM_ID` and `AGENT_NUMBER` exported, writes session IDs to `swarms/<N>/pane-config.sh`, and records the launch mode plus per-agent engine, model, and effort choices in `swarms/<N>/launch.env`. Claude panes receive a startup kick; Codex panes begin from their startup prompt. In swarm mode, Agent 1 runs a comms check, pinging each worker and waiting for confirmations before proceeding; in single-agent mode, it skips the check.
+The script then opens iTerm2 with the pane(s) for the mode you picked, starts the selected CLI with `SWARM_ID` and `AGENT_NUMBER` exported, writes session IDs to `swarms/<N>/pane-config.sh`, and records the launch mode plus per-agent engine, gateway, model, and effort choices in `swarms/<N>/launch.env`. Claude panes receive a startup kick; Codex panes begin from their startup prompt. In swarm mode, Agent 1 runs a comms check, pinging each worker and waiting for confirmations before proceeding; in single-agent mode, it skips the check.
 
 ### 2. Give Agent 1 the work
 
@@ -137,6 +139,22 @@ It works both from a plain shell and from inside one of the agent panes (the cal
 
 Scans `projects/` and lets you pick one or more existing projects (or `all`). Each selected project gets its own tab in the frontmost iTerm2 window, with 4 agent panes, a named tab title, and its own swarm ID.
 
+## Bifrost gateway
+
+Any pane, Claude or Codex, can run through PlayOn's Bifrost gateway (`https://bifrost.playonshared.co`) instead of directly. It is chosen per pane (`GATEWAY_n=direct|bifrost` in `swarms/<N>/launch.env`; a missing value means `direct`).
+
+One-time setup:
+
+```bash
+npx -y @maximhq/bifrost-cli
+~/.bifrost/bin/bifrost context add playon --base-url https://bifrost.playonshared.co --use
+~/.bifrost/bin/bifrost auth login     # Google SSO; no key is stored
+```
+
+For Codex panes also create `~/.codex/bifrost.config.toml` (provider `bifrost`, `base_url = "https://bifrost.playonshared.co/openai/v1"`, an `[model_providers.bifrost.auth]` command that runs `bifrost --context playon auth print-token`). Codex model ids need the `openai/` prefix. Do not add the `PlayOn_mcp` connector to this profile: swarm Codex panes run with `-a never` and could write to Slack and Jira unprompted.
+
+Launchers refuse to start a Bifrost pane, and `restart-swarm.sh --hard` refuses before checkpointing, when Bifrost is missing or signed out, `jq` is missing, or the Codex profile does not point at the gateway. Claude Bifrost panes pass one merged `--settings` argument (`tools/bifrost-claude-settings.json` plus pane 1's settings), because a repeated `--settings` replaces the earlier one. Bifrost models are not checked against the Bifrost catalog; Claude models still are checked against the native list.
+
 ## Swarms
 
 Each `./launch.sh` run creates a new **swarm** (1 agent by default, or 4 if you pick the full swarm at launch) with its own directory. `./workspace.sh` always opens its tabs as full 4-agent swarms.
@@ -162,7 +180,7 @@ Swarm numbers are auto-assigned (next available integer). Multiple swarms can be
 swarms/<N>/
   pane-config.sh          iTerm2 session IDs for this swarm
   ACTIVE_PROJECT          Current project ID for this swarm
-  launch.env              Launch parameters (per-agent model/effort)
+  launch.env              Launch parameters (per-agent engine/gateway/model/effort)
   checkpoints/            Snapshots taken by restart-swarm.sh
 
 projects/
