@@ -136,6 +136,12 @@ validate_models() {
   return 0
 }
 
+# applescript_escape <text>: makes text safe inside an AppleScript double-quoted string.
+applescript_escape() {
+  local t=${1//\\/\\\\}
+  printf '%s' "${t//\"/\\\"}"
+}
+
 # check_bifrost "<engine per pane>" "<gateway per pane>"
 # Refuses before any pane starts, and before restart-swarm.sh checkpoints, when a pane
 # routed through Bifrost could not authenticate. print-token is the same call the panes

@@ -49,6 +49,18 @@ echo "--- unknown gateway is refused ---"
 if u=$(engine_cmd 2 claude m high "" "" vpn 2>&1); then bad "unknown gateway accepted: $u"
 else ok "unknown gateway refused"; has "$u" "Fix:" && ok "refusal states a remediation" || bad "no remediation: $u"; fi
 
+echo "--- the command survives AppleScript embedding (launch.sh) ---"
+# Stubbed osascript cannot see this: the line must compile as a real AppleScript string.
+for cfg in "1 claude" "2 claude"; do
+  set -- $cfg
+  cmd=$(engine_cmd "$1" "$2" m high "" "$( [ "$1" = 1 ] && echo "$ORCH_TOOL_FLAGS")" bifrost)
+  src="tell application \"iTerm2\" to write text \"$cmd\""
+  osacompile -o "$TMP/raw.scpt" -e "$src" >/dev/null 2>&1 && bad "control: unescaped $2 pane $1 compiled, so the test cannot fail" || ok "control: unescaped $2 pane $1 does not compile"
+  src="tell application \"iTerm2\" to write text \"$(applescript_escape "$cmd")\""
+  osacompile -o "$TMP/esc.scpt" -e "$src" >/dev/null 2>&1 && ok "escaped $2 pane $1 compiles" || bad "escaped $2 pane $1 does not compile"
+done
+/usr/bin/grep -q 'CMD1=$(applescript_escape' launch.sh && ok "launch.sh escapes its commands" || bad "launch.sh does not escape its commands"
+
 echo "--- check_bifrost ---"
 mkdir -p "$TMP/home"; echo 'base_url = "https://bifrost.playonshared.co/openai/v1"' > "$TMP/home/bifrost.config.toml"
 printf '#!/bin/sh\necho SECRET-TOKEN\nexit 0\n' > "$TMP/good"; printf '#!/bin/sh\necho SECRET-TOKEN\nexit 1\n' > "$TMP/signedout"

@@ -340,6 +340,10 @@ CMD2=$(engine_cmd 2 "$ENGINE_2" "$MODEL_2" "$EFFORT_2" "" "$THINK_FLAG" "$GATEWA
 CMD3=$(engine_cmd 3 "$ENGINE_3" "$MODEL_3" "$EFFORT_3" "" "$THINK_FLAG" "$GATEWAY_3") || exit 1
 CMD4=$(engine_cmd 4 "$ENGINE_4" "$MODEL_4" "$EFFORT_4" "" "$THINK_FLAG" "$GATEWAY_4") || exit 1
 
+# The commands are embedded in AppleScript double-quoted strings below.
+CMD1=$(applescript_escape "$CMD1"); CMD2=$(applescript_escape "$CMD2")
+CMD3=$(applescript_escape "$CMD3"); CMD4=$(applescript_escape "$CMD4")
+
 echo "Launching agent workspace in iTerm2..."
 
 if [ "$AGENT_COUNT" = "1" ]; then
