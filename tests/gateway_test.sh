@@ -39,7 +39,7 @@ has "$(cat tools/bifrost-claude-settings.json)" "auth print-token" && ok "apiKey
 has "$(cat tools/bifrost-claude-settings.json)" "ya29" && bad "a token is stored in the settings file" || ok "no token is stored in the settings file"
 
 has "$w" "--mcp-config" && ok "worker loads the bifrost MCP config" || bad "worker missing --mcp-config: $w"
-has "$o" "--mcp-config" && bad "pane 1 loads MCP despite --strict-mcp-config" || ok "pane 1 stays out of the bifrost MCP config"
+has "$o" "--mcp-config" && has "$o" "--strict-mcp-config" && ok "pane 1 loads the bifrost MCP config under strict mode" || bad "pane 1 missing --mcp-config: $o"
 
 echo "--- codex over bifrost ---"
 c=$(engine_cmd 3 codex openai/gpt-6.1-sol high "" "" bifrost)
@@ -69,6 +69,7 @@ mkdir -p "$TMP/home"; echo 'base_url = "https://bifrost.playonshared.co/openai/v
 printf '#!/bin/sh\necho SECRET-TOKEN\nexit 0\n' > "$TMP/good"; printf '#!/bin/sh\necho SECRET-TOKEN\nexit 1\n' > "$TMP/signedout"
 chmod +x "$TMP/good" "$TMP/signedout"
 export BIFROST_CODEX_PROFILE="$TMP/home/bifrost.config.toml"
+echo '{"mcpServers":{"x":{}}}' > "$TMP/home/mcp.json"; export BIFROST_CLAUDE_MCP="$TMP/home/mcp.json"
 BIFROST_BIN="$TMP/good" check_bifrost "claude codex" "bifrost bifrost" >/dev/null 2>&1 && ok "signed-in bifrost passes" || bad "signed-in bifrost refused"
 out=$(BIFROST_BIN="$TMP/good" check_bifrost "claude" "bifrost" 2>&1); has "$out" "SECRET-TOKEN" && bad "token leaked into output" || ok "token never reaches output"
 out=$(BIFROST_BIN="$TMP/signedout" check_bifrost "claude" "bifrost" 2>&1); rc=$?
@@ -85,13 +86,12 @@ BIFROST_BIN="$TMP/good" BIFROST_CODEX_PROFILE="$TMP/none.toml" check_bifrost "cl
 BIFROST_BIN="$TMP/nope" check_bifrost "claude codex" "direct direct" >/dev/null 2>&1 \
   && ok "all-direct swarm never touches bifrost (control)" || bad "all-direct swarm gated on bifrost"
 
-echo '{"mcpServers":{"x":{}}}' > "$TMP/home/mcp.json"
-BIFROST_BIN="$TMP/good" BIFROST_CLAUDE_MCP="$TMP/home/mcp.json" check_bifrost "claude claude" "bifrost bifrost" >/dev/null 2>&1 \
+BIFROST_BIN="$TMP/good" check_bifrost "claude claude" "bifrost bifrost" >/dev/null 2>&1 \
   && ok "claude worker with MCP config passes" || bad "claude worker with MCP config refused"
 BIFROST_BIN="$TMP/good" BIFROST_CLAUDE_MCP="$TMP/none.json" check_bifrost "claude claude" "bifrost bifrost" >/dev/null 2>&1 \
   && bad "missing MCP config accepted for a worker" || ok "missing MCP config refused for a worker"
 BIFROST_BIN="$TMP/good" BIFROST_CLAUDE_MCP="$TMP/none.json" check_bifrost "claude" "bifrost" >/dev/null 2>&1 \
-  && ok "MCP config not required when only pane 1 uses bifrost" || bad "pane 1 alone refused over MCP config"
+  && bad "missing MCP config accepted for pane 1" || ok "missing MCP config refused for pane 1"
 
 cp tools/bifrost-claude-settings.json "$TMP/bk.json"; echo '{not json' > tools/bifrost-claude-settings.json
 BIFROST_BIN="$TMP/good" check_bifrost "claude" "bifrost" >/dev/null 2>&1 && bad "corrupt bifrost settings accepted" || ok "corrupt bifrost settings refused"
