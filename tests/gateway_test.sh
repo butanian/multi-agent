@@ -38,6 +38,9 @@ done
 has "$(cat tools/bifrost-claude-settings.json)" "auth print-token" && ok "apiKeyHelper fetches a fresh SSO token" || bad "apiKeyHelper is not print-token"
 has "$(cat tools/bifrost-claude-settings.json)" "ya29" && bad "a token is stored in the settings file" || ok "no token is stored in the settings file"
 
+has "$w" "--mcp-config" && ok "worker loads the bifrost MCP config" || bad "worker missing --mcp-config: $w"
+has "$o" "--mcp-config" && bad "pane 1 loads MCP despite --strict-mcp-config" || ok "pane 1 stays out of the bifrost MCP config"
+
 echo "--- codex over bifrost ---"
 c=$(engine_cmd 3 codex openai/gpt-6.1-sol high "" "" bifrost)
 has "$c" " -p bifrost" && ok "codex uses the bifrost profile" || bad "codex missing -p bifrost: $c"
@@ -81,6 +84,14 @@ BIFROST_BIN="$TMP/good" BIFROST_CODEX_PROFILE="$TMP/none.toml" check_bifrost "cl
   && ok "codex profile not required for claude-only swarm" || bad "claude-only swarm refused over codex profile"
 BIFROST_BIN="$TMP/nope" check_bifrost "claude codex" "direct direct" >/dev/null 2>&1 \
   && ok "all-direct swarm never touches bifrost (control)" || bad "all-direct swarm gated on bifrost"
+
+echo '{"mcpServers":{"x":{}}}' > "$TMP/home/mcp.json"
+BIFROST_BIN="$TMP/good" BIFROST_CLAUDE_MCP="$TMP/home/mcp.json" check_bifrost "claude claude" "bifrost bifrost" >/dev/null 2>&1 \
+  && ok "claude worker with MCP config passes" || bad "claude worker with MCP config refused"
+BIFROST_BIN="$TMP/good" BIFROST_CLAUDE_MCP="$TMP/none.json" check_bifrost "claude claude" "bifrost bifrost" >/dev/null 2>&1 \
+  && bad "missing MCP config accepted for a worker" || ok "missing MCP config refused for a worker"
+BIFROST_BIN="$TMP/good" BIFROST_CLAUDE_MCP="$TMP/none.json" check_bifrost "claude" "bifrost" >/dev/null 2>&1 \
+  && ok "MCP config not required when only pane 1 uses bifrost" || bad "pane 1 alone refused over MCP config"
 
 cp tools/bifrost-claude-settings.json "$TMP/bk.json"; echo '{not json' > tools/bifrost-claude-settings.json
 BIFROST_BIN="$TMP/good" check_bifrost "claude" "bifrost" >/dev/null 2>&1 && bad "corrupt bifrost settings accepted" || ok "corrupt bifrost settings refused"

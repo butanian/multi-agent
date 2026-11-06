@@ -17,6 +17,7 @@ ORCH_TOOL_FLAGS="--tools Read,Write,Edit,Bash,Skill --strict-mcp-config --settin
 
 BIFROST_BIN="${BIFROST_BIN:-$HOME/.bifrost/bin/bifrost}"
 BIFROST_CODEX_PROFILE="${BIFROST_CODEX_PROFILE:-$HOME/.codex/bifrost.config.toml}"
+BIFROST_CLAUDE_MCP="${BIFROST_CLAUDE_MCP:-$HOME/.claude/mcp.bifrost.json}"
 
 # engine_cmd <agent> <engine> <model> <effort> <perms_flag> <extra_flags> [gateway]
 # Prints the command that starts one pane. Default engine is claude, and the claude
@@ -39,6 +40,8 @@ engine_cmd() {
       files="$LAUNCHER_ROOT/tools/bifrost-claude-settings.json"
       [ "$agent" = 1 ] && files="$LAUNCHER_ROOT/tools/pane1-settings.json $files"
       gw_flags=" --settings \"\$(jq -s 'reduce .[] as \$x ({}; . * \$x)' $files)\""
+      # Pane 1 runs --strict-mcp-config and stays out of Slack and Jira.
+      [ "$agent" != 1 ] && gw_flags+=" --mcp-config \"$BIFROST_CLAUDE_MCP\""
       ;;
     *)
       printf 'LAUNCH REFUSED: unknown gateway %s for agent %s\n  Fix: set GATEWAY_%s to direct or bifrost\n' \
@@ -147,11 +150,11 @@ applescript_escape() {
 # routed through Bifrost could not authenticate. print-token is the same call the panes
 # make, and its output is discarded so a token never reaches a terminal or log.
 check_bifrost() {
-  local engines=($1) gateways=($2) i need_claude="" need_codex="" refuse
+  local engines=($1) gateways=($2) i need_claude="" need_codex="" need_mcp="" refuse
   refuse() { printf 'LAUNCH REFUSED: %s\n  Fix: %s\n' "$1" "$2" >&2; return 1; }
   for i in "${!gateways[@]}"; do
     [ "${gateways[$i]}" = bifrost ] || continue
-    case "${engines[$i]:-claude}" in codex) need_codex=1 ;; *) need_claude=1 ;; esac
+    case "${engines[$i]:-claude}" in codex) need_codex=1 ;; *) need_claude=1; [ "$i" -gt 0 ] && need_mcp=1 ;; esac
   done
   [ -n "$need_claude$need_codex" ] || return 0
   [ -x "$BIFROST_BIN" ] || refuse "$BIFROST_BIN is not installed" "npx -y @maximhq/bifrost-cli  and see the onboarding steps, or set GATEWAY_n=direct" || return 1
@@ -162,6 +165,10 @@ check_bifrost() {
     jq -es 'reduce .[] as $x ({}; . * $x) | .env.ANTHROPIC_BASE_URL' \
       "$LAUNCHER_ROOT/tools/pane1-settings.json" "$LAUNCHER_ROOT/tools/bifrost-claude-settings.json" >/dev/null 2>&1 \
       || refuse "the merged Claude settings are unreadable or lose the bifrost base URL" "repair tools/bifrost-claude-settings.json" || return 1
+  fi
+  if [ -n "$need_mcp" ]; then
+    jq -e '.mcpServers' "$BIFROST_CLAUDE_MCP" >/dev/null 2>&1 \
+      || refuse "$BIFROST_CLAUDE_MCP is missing or has no mcpServers" "create it from the onboarding steps" || return 1
   fi
   if [ -n "$need_codex" ]; then
     /usr/bin/grep -q 'bifrost.playonshared.co' "$BIFROST_CODEX_PROFILE" 2>/dev/null \
