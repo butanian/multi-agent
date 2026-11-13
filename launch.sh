@@ -41,6 +41,25 @@ fi
 # ── Thinking: always level 3 (high) ───────────────────────────────────────────
 THINK_FLAG="--append-system-prompt 'Think deeply and use extended reasoning. Explore edge cases and alternatives. Prefer thoroughness over brevity.'"
 
+# ── Defaults or custom ─────────────────────────────────────────────────────────
+echo "── Launch Options ────────────────────────────────────────────────────────"
+echo "  1) Default: single agent, Bifrost Claude, claude-sonnet-5-5, medium effort"
+echo "  2) Custom"
+read -p "  Pick [1/2] (default 1): " RAW_OPTIONS
+echo "──────────────────────────────────────────────────────────────────────────"
+echo ""
+
+if [ "$(echo "${RAW_OPTIONS:-1}" | tr -d '[:space:]')" != "2" ]; then
+  AGENT_COUNT=1
+  ENGINE_1=claude GATEWAY_1=bifrost
+  ENGINE_2=claude ENGINE_3=claude ENGINE_4=claude
+  GATEWAY_2=direct GATEWAY_3=direct GATEWAY_4=direct
+  MODEL_1=claude-sonnet-5-5
+  MODEL_2=$DEFAULT_STRONG_MODEL MODEL_3=$DEFAULT_STRONG_MODEL MODEL_4=$DEFAULT_STRONG_MODEL
+  ORCH_MODEL="$MODEL_1" WORKER_MODEL="$MODEL_2"
+  EFFORT_1=medium EFFORT_2=medium EFFORT_3=medium EFFORT_4=medium
+else
+
 # ── Launch mode ────────────────────────────────────────────────────────────────
 # Default is a single pane. The 4-pane orchestrator/worker split still exists below and
 # stays selectable, so it is available the day a "grow this swarm" feature reads it — it
@@ -57,33 +76,26 @@ AGENT_COUNT=$(echo "${RAW_AGENT_COUNT:-1}" | tr -d '[:space:]')
 # ── Engines ────────────────────────────────────────────────────────────────────
 pick_engine() {
   local agent="$1" raw
-  echo "  Agent $agent engine:" >&2
-  echo "    1) Claude (default)   2) Codex" >&2
-  read -p "  Pick [1/2] (default 1): " raw
+  echo "  Agent $agent provider:" >&2
+  echo "    1) Claude (default)   2) Bifrost Claude   3) Codex   4) Bifrost Codex" >&2
+  read -p "  Pick [1-4] (default 1): " raw
   case "$(echo "${raw:-1}" | tr -d '[:space:]')" in
-    2) echo codex ;;
-    *) echo claude ;;
+    2) echo "claude bifrost" ;;
+    3) echo "codex direct" ;;
+    4) echo "codex bifrost" ;;
+    *) echo "claude direct" ;;
   esac
 }
 
-ENGINE_1=$(pick_engine 1)
+read -r ENGINE_1 GATEWAY_1 <<< "$(pick_engine 1)"
 if [ "$AGENT_COUNT" = "4" ]; then
-  ENGINE_2=$(pick_engine 2)
-  ENGINE_3=$(pick_engine 3)
-  ENGINE_4=$(pick_engine 4)
+  read -r ENGINE_2 GATEWAY_2 <<< "$(pick_engine 2)"
+  read -r ENGINE_3 GATEWAY_3 <<< "$(pick_engine 3)"
+  read -r ENGINE_4 GATEWAY_4 <<< "$(pick_engine 4)"
 else
   ENGINE_2=claude ENGINE_3=claude ENGINE_4=claude
+  GATEWAY_2=direct GATEWAY_3=direct GATEWAY_4=direct
 fi
-
-# One question. Answer "all", blank for none, or pane numbers such as "2 4". launch.env
-# records GATEWAY_n per pane, so a later edit there changes one pane.
-read -p "  Panes to route through the Bifrost gateway [all / numbers like '2 4' / blank = none]: " _gw
-GATEWAY_1=direct GATEWAY_2=direct GATEWAY_3=direct GATEWAY_4=direct
-case "$(echo "${_gw:-}" | tr 'A-Z' 'a-z')" in
-  *all*) GATEWAY_1=bifrost GATEWAY_2=bifrost GATEWAY_3=bifrost GATEWAY_4=bifrost ;;
-  *) for _n in $_gw; do case "$_n" in [1-4]) printf -v "GATEWAY_$_n" bifrost ;; esac; done ;;
-esac
-[ "$AGENT_COUNT" = "4" ] || GATEWAY_2=direct GATEWAY_3=direct GATEWAY_4=direct
 
 # ── Models ─────────────────────────────────────────────────────────────────────
 MODEL_MENU=()
@@ -238,6 +250,8 @@ EFFORT_1="$ORCH_EFFORT"
 EFFORT_2="$WORKER_EFFORT"
 EFFORT_3="$WORKER_EFFORT"
 EFFORT_4="$WORKER_EFFORT"
+
+fi
 
 # ── Project Setup ──────────────────────────────────────────────────────────────
 echo "── Project Setup ─────────────────────────────────────────────────────────"

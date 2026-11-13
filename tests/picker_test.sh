@@ -87,7 +87,7 @@ EOS
   printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/send-to-agent.sh"
   chmod +x "$tmp/bin/osascript" "$tmp/bin/sleep" "$tmp/send-to-agent.sh" "$tmp/tools/model-lookup.py"
   case "$name" in
-    launch.sh)    stdin=$'4\n\n\n\n\n\n'"$pick1"$'\n'"$pick2"$'\n\n\n1\n\n\nn\nprobeproj\n' ;;
+    launch.sh)    stdin=${DEFAULT_STDIN:-$'2\n4\n\n\n\n\n'"$pick1"$'\n'"$pick2"$'\n\n\n1\n\n\nn\nprobeproj\n'} ;;
     workspace.sh) stdin=$'1\n' ;;
   esac
   ( cd "$tmp" && PANE_REC="$tmp/.panes" LIST_FAIL="${LIST_FAIL:-}" PATH="$tmp/bin:$PATH" \
@@ -180,6 +180,18 @@ rm -rf "$T"
 T=$(DEF_STRONG= run_launcher workspace.sh)
 refused "$T" && ok "workspace.sh refuses an empty default" \
   || bad "workspace.sh launched pane 1 as '$(pane_model "$T" 1)'"
+rm -rf "$T"
+
+echo "--- the default option launches one Bifrost Claude pane on sonnet-5-5 at medium ---"
+T=$(DEFAULT_STDIN=$'\n\nn\nprobeproj\n' run_launcher launch.sh)
+[ "$(/usr/bin/grep -c 'AGENT_NUMBER=' "$T/.panes")" = 1 ] && ok "default opens a single pane" \
+  || bad "default opened $(/usr/bin/grep -c 'AGENT_NUMBER=' "$T/.panes") panes"
+[ "$(pane_model "$T" 1)" = claude-sonnet-5-5 ] && ok "default pane runs claude-sonnet-5-5" \
+  || bad "default pane ran '$(pane_model "$T" 1)'"
+/usr/bin/grep -m1 'AGENT_NUMBER=1 ' "$T/.panes" | /usr/bin/grep -q -- "--effort 'medium'\|--effort medium" \
+  && ok "default pane runs at medium effort" || bad "default pane effort is not medium"
+/usr/bin/grep -q "^GATEWAY_1='bifrost'" "$T/swarms/"*/launch.env 2>/dev/null \
+  && ok "default pane is routed through Bifrost" || bad "default pane is not routed through Bifrost"
 rm -rf "$T"
 
 echo "--- the literals are gone, so there is nothing left to go stale ---"

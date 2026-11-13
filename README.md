@@ -76,7 +76,7 @@ The core loop: launch a swarm, give Agent 1 the work, let the agents coordinate,
 `launch.sh` walks you through six prompt blocks:
 
 1. **Launch mode.** `1` for a single agent (the default), or `4` for the full orchestrator/worker swarm.
-2. **Engines.** Choose Claude or Codex for each agent. Claude is the default.
+2. **Provider.** Choose Claude, Bifrost Claude, Codex, or Bifrost Codex for each agent. Claude is the default.
 3. **Gateway.** Choose which panes go through Bifrost: `all`, pane numbers such as `2 4`, or blank for none (direct from Anthropic or OpenAI).
 4. **Models.** Choose a model per agent from the active CLI's current catalog. Claude models come from its entitled model list; Codex models come from `codex debug models`. Press Enter for the default or type a model ID.
 5. **Effort.** Single-agent mode asks for one effort level. Swarm mode offers orchestrator high / workers lower, all high, or all lower. Values are `xhigh`, `high`, `medium`, `low`; defaults are `xhigh` and `high`.
@@ -141,7 +141,7 @@ Scans `projects/` and lets you pick one or more existing projects (or `all`). Ea
 
 ## Bifrost gateway
 
-Any pane, Claude or Codex, can run through PlayOn's Bifrost gateway (`https://bifrost.playonshared.co`) instead of directly. It is chosen per pane (`GATEWAY_n=direct|bifrost` in `swarms/<N>/launch.env`; a missing value means `direct`).
+Any pane, Claude or Codex, can run through PlayOn's Bifrost gateway (`https://bifrost.playonshared.co`) instead of directly. It is chosen per pane in the launch picker (recorded as `GATEWAY_n=direct|bifrost` in `swarms/<N>/launch.env`; a missing value means `direct`).
 
 One-time setup:
 
