@@ -8,12 +8,7 @@ LAUNCHER_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)"
 DEFAULT_STRONG_MODEL="claude-opus-5-5"
 DEFAULT_CHEAP_MODEL="claude-opus-5-5"
 
-# Pane 1 only. Narrows the tool set and adds a path-scoped Read deny. The deny is a
-# speed bump, not containment: Bash stays available so writes are unrestricted, and any
-# extension not listed in the file stays readable. tools/pane1-settings.json states its
-# own limits, and the preflight refuses to launch if it does not parse, because a
-# malformed settings file silently disables every deny rule.
-ORCH_TOOL_FLAGS="--tools Read,Write,Edit,Bash,Skill --strict-mcp-config --settings $LAUNCHER_ROOT/tools/pane1-settings.json"
+ORCH_TOOL_FLAGS=""
 
 BIFROST_BIN="${BIFROST_BIN:-$HOME/.bifrost/bin/bifrost}"
 BIFROST_CODEX_PROFILE="${BIFROST_CODEX_PROFILE:-$HOME/.codex/bifrost.config.toml}"
@@ -38,7 +33,6 @@ engine_cmd() {
       # A repeated --settings replaces the earlier one (measured, Claude Code 2.1.316), so
       # pane 1 gets one merged argument that carries its own file too.
       files="$LAUNCHER_ROOT/tools/bifrost-claude-settings.json"
-      [ "$agent" = 1 ] && files="$LAUNCHER_ROOT/tools/pane1-settings.json $files"
       gw_flags=" --settings \"\$(jq -s 'reduce .[] as \$x ({}; . * \$x)' $files)\""
       gw_flags+=" --mcp-config \"$BIFROST_CLAUDE_MCP\""
       ;;
